@@ -29,9 +29,23 @@ jobs:
         run: |
           $files = Get-ChildItem RetailPrint -Recurse -File |
             Where-Object { $_.Extension -in '.cs', '.xaml' }
-          $bad = $files | Select-String -Pattern 'MÃ|Ä‘|Ä|áº|á»|Æ°|Æ¡'
+          $patterns = @(
+            ('M' + [char]0x00C3),
+            ([string][char]0x00C4),
+            ([string][char]0x00C6),
+            (([string][char]0x00E1) + [char]0x00BA),
+            (([string][char]0x00E1) + [char]0x00BB),
+            ([string][char]0xFFFD)
+          )
+          $bad = foreach ($file in $files) {
+            foreach ($pattern in $patterns) {
+              Select-String -Path $file.FullName -SimpleMatch -Pattern $pattern
+            }
+          }
           if ($bad) {
-            $bad | ForEach-Object { Write-Error "$($_.Path):$($_.LineNumber) $($_.Line)" }
+            $bad | Sort-Object Path, LineNumber -Unique | ForEach-Object {
+              Write-Error "$($_.Path):$($_.LineNumber) $($_.Line)"
+            }
             throw 'Phát hiện chuỗi tiếng Việt bị sai mã hóa.'
           }
 
