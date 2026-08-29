@@ -1,47 +1,42 @@
 # Retail Print
 
-Ứng dụng Windows nhỏ chạy nền để cấu hình và gửi lệnh in tới máy in nhiệt trong mạng nội bộ.
+Ứng dụng Windows nhỏ chạy nền để nhận lệnh in từ Retail và gửi tới máy in nhiệt trong mạng nội bộ.
 
-## MVP hiện tại
+## Chức năng
 
-- Cửa sổ mini, không sidebar/dashboard lớn.
-- System Tray: bấm icon để mở lại; đóng cửa sổ chỉ thu xuống tray.
+- Giao diện mini, dùng Segoe UI/ClearType.
+- Icon riêng cho ứng dụng và System Tray.
 - Thiết lập tên máy in, IP, cổng, khổ 80/58 mm.
-- In thử qua TCP ESC/POS, mặc định cổng 9100.
-- Lưu cấu hình tại `%AppData%\RetailPrint\settings.json`.
-- Tùy chọn `Khởi động cùng Windows` bằng `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, không cần quyền Administrator; khi Windows khởi động app vào thẳng System Tray, không bật cửa sổ giữa màn hình.
-- Chỉ chạy một instance; mở lại Retail Print sẽ gọi cửa sổ của instance đang chạy thay vì tạo tiến trình in thứ hai.
-- Không tự retry lệnh in khi kết quả gửi không chắc chắn.
+- In thử trực tiếp tới máy in TCP/ESC-POS, mặc định cổng 9100.
+- Lưu cấu hình riêng trên máy Windows.
+- Khởi động cùng Windows, không cần quyền Administrator.
+- Chỉ chạy một phiên; mở lần hai sẽ gọi lại cửa sổ đang chạy.
+- Lấy mã kết nối 8 ký tự để ghép với Retail.
+- Kết nối ra Hệ thống Công Ty bằng HTTPS; không mở cổng trên Windows.
+- Gửi trạng thái trực tuyến, nhận hàng đợi lệnh in và xác nhận kết quả.
+- Có nhật ký cục bộ để không tự in lại khi kết quả lần trước chưa chắc chắn.
 
-## Yêu cầu phát triển
+## Luồng kết nối
 
-- Windows 10/11.
-- .NET 8 SDK.
+1. Windows và máy in ở cùng mạng nội bộ.
+2. Mở Retail Print, nhập IP/cổng/khổ giấy và bấm `In thử`.
+3. Bấm `Lấy mã`.
+4. Trên Retail: `Thiết lập máy in` → `Retail Print trên Windows` → nhập mã 8 ký tự.
+5. Khi Windows hiển thị `Retail đang trực tuyến`, Retail có thể gửi lệnh in.
+6. Retail Print nhận lệnh từ Hệ thống Công Ty và gửi tới máy in bằng TCP/ESC-POS.
 
-## Chạy phát triển
+Retail trên điện thoại không cần biết IP của máy Windows và không gọi trực tiếp cổng `9100`.
+
+## Build
+
+Yêu cầu Windows 10/11 và .NET 8 SDK trở lên.
 
 ```powershell
-dotnet run --project .\RetailPrint\RetailPrint.csproj
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-## Build bản chạy độc lập
+File đầu ra: `publish\win-x64\RetailPrint.exe`.
 
-```powershell
-.\build.ps1
-```
+Mặc định ứng dụng kết nối API Công Ty production. Khi phát triển hoặc kiểm thử có thể đặt biến môi trường `RETAIL_PRINT_API_URL` thành một API tương thích.
 
-File publish nằm trong `publish\win-x64`.
-
-## Luồng sử dụng
-
-1. Mở Retail Print.
-2. Nhập IP máy in và cổng (thường là 9100).
-3. Chọn 80 mm hoặc 58 mm.
-4. Bấm `In thử`.
-5. Nếu máy in chạy đúng, bấm `Lưu`.
-6. Có thể bật `Khởi động cùng Windows`.
-7. Đóng cửa sổ; ứng dụng tiếp tục chạy dưới System Tray.
-
-## Bước tiếp theo
-
-Sau khi shell Windows ổn định, bổ sung giao tiếp an toàn với Retail PWA. Phần PWA không gọi raw TCP trực tiếp tới máy in; Retail Print sẽ nhận lệnh từ kênh kết nối đã ghép nối rồi gửi tới IP máy in trong LAN.
+Không lưu token, mật khẩu database hoặc khóa nhà cung cấp trong repository.

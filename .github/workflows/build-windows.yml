@@ -1,0 +1,65 @@
+name: Windows CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'agent/**'
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Reject broken Vietnamese text
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem RetailPrint -Recurse -File |
+            Where-Object { $_.Extension -in '.cs', '.xaml' }
+          $bad = $files | Select-String -Pattern 'MÃ|Ä‘|Ä|áº|á»|Æ°|Æ¡'
+          if ($bad) {
+            $bad | ForEach-Object { Write-Error "$($_.Path):$($_.LineNumber) $($_.Line)" }
+            throw 'Phát hiện chuỗi tiếng Việt bị sai mã hóa.'
+          }
+
+      - name: Restore
+        run: dotnet restore .\RetailPrint\RetailPrint.csproj
+
+      - name: Build
+        run: dotnet build .\RetailPrint\RetailPrint.csproj -c Release --no-restore
+
+      - name: Publish Windows x64
+        shell: pwsh
+        run: |
+          dotnet publish .\RetailPrint\RetailPrint.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:DebugType=None `
+            -o .\publish\win-x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path .\publish\win-x64\RetailPrint.exe)) {
+            throw 'Không tạo được RetailPrint.exe.'
+          }
+
+      - name: Upload Retail Print
+        uses: actions/upload-artifact@v4
+        with:
+          name: RetailPrint-win-x64
+          path: publish/win-x64/RetailPrint.exe
+          if-no-files-found: error
+          retention-days: 7
