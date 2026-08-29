@@ -1,4 +1,4 @@
-﻿using System.Threading;
+using System.Threading;
 using System.Windows;
 using RetailPrint.Services;
 
@@ -16,12 +16,18 @@ public partial class App : System.Windows.Application
     private SettingsService? _settingsService;
     private StartupService? _startupService;
     private PrinterClient? _printerClient;
+    private RetailApiClient? _retailApiClient;
+    private RetailAgentService? _agentService;
 
     public MainWindow? MainWindowInstance { get; private set; }
 
     protected override void OnStartup(StartupEventArgs e)
     {
-        _singleInstanceMutex = new Mutex(initiallyOwned: true, MutexName, out var createdNew);
+        _singleInstanceMutex = new Mutex(
+            initiallyOwned: true,
+            MutexName,
+            out var createdNew);
+
         if (!createdNew)
         {
             try
@@ -31,7 +37,7 @@ public partial class App : System.Windows.Application
             }
             catch
             {
-                // Náº¿u instance cÅ© Ä‘ang thoÃ¡t, chá»‰ káº¿t thÃºc instance má»›i Ä‘á»ƒ trÃ¡nh cháº¡y trÃ¹ng.
+                // Nếu phiên cũ đang thoát, chỉ kết thúc phiên mới để tránh chạy trùng.
             }
 
             Shutdown();
@@ -40,7 +46,11 @@ public partial class App : System.Windows.Application
 
         base.OnStartup(e);
 
-        _showWindowEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowWindowEventName);
+        _showWindowEvent = new EventWaitHandle(
+            false,
+            EventResetMode.AutoReset,
+            ShowWindowEventName);
+
         _showWindowWait = ThreadPool.RegisterWaitForSingleObject(
             _showWindowEvent,
             (_, _) => Dispatcher.Invoke(ShowMainWindow),
@@ -51,8 +61,24 @@ public partial class App : System.Windows.Application
         _settingsService = new SettingsService();
         _startupService = new StartupService();
         _printerClient = new PrinterClient();
+        _retailApiClient = new RetailApiClient();
 
-        MainWindowInstance = new MainWindow(_settingsService, _startupService, _printerClient);
+        var identityService = new DeviceIdentityService();
+        var journal = new PrintJobJournal();
+
+        _agentService = new RetailAgentService(
+            _settingsService,
+            identityService,
+            _retailApiClient,
+            _printerClient,
+            journal);
+
+        MainWindowInstance = new MainWindow(
+            _settingsService,
+            _startupService,
+            _printerClient,
+            _agentService);
+
         _trayService = new TrayService(
             showWindow: ShowMainWindow,
             testPrint: TestPrintFromTrayAsync,
@@ -63,8 +89,13 @@ public partial class App : System.Windows.Application
         MainWindowInstance.StartupPreferenceChanged += enabled =>
             _trayService?.SetStartupChecked(enabled);
 
+        _agentService.Start();
+
         var startInBackground = e.Args.Any(arg =>
-            string.Equals(arg, "--background", StringComparison.OrdinalIgnoreCase));
+            string.Equals(
+                arg,
+                "--background",
+                StringComparison.OrdinalIgnoreCase));
 
         if (!startInBackground)
         {
@@ -89,16 +120,19 @@ public partial class App : System.Windows.Application
             return;
 
         var settings = _settingsService.Load();
+
         try
         {
             await _printerClient.PrintTestAsync(settings);
-            _trayService?.ShowStatus("Retail Print", "MÃ¡y in pháº£n há»“i tá»‘t. In thá»­ Ä‘Ã£ gá»­i.");
-            MainWindowInstance?.SetConnectionStatus(true, "Sáºµn sÃ ng");
+            _trayService?.ShowStatus(
+                "Retail Print",
+                "Máy in phản hồi tốt. Phiếu in thử đã được gửi.");
         }
-        catch (Exception ex)
+        catch (Exception error)
         {
-            _trayService?.ShowStatus("Retail Print", $"KhÃ´ng in Ä‘Æ°á»£c: {ex.Message}");
-            MainWindowInstance?.SetConnectionStatus(false, "KhÃ´ng káº¿t ná»‘i");
+            _trayService?.ShowStatus(
+                "Retail Print",
+                $"Không in được: {error.Message}");
         }
     }
 
@@ -109,9 +143,19 @@ public partial class App : System.Windows.Application
 
         var settings = _settingsService.Load();
         settings.StartWithWindows = enabled;
-        _startupService.Apply(enabled);
-        _settingsService.Save(settings);
-        MainWindowInstance?.SetStartWithWindows(enabled);
+
+        try
+        {
+            _startupService.Apply(enabled);
+            _settingsService.Save(settings);
+            MainWindowInstance?.SetStartWithWindows(enabled);
+        }
+        catch (Exception error)
+        {
+            _trayService?.ShowStatus(
+                "Retail Print",
+                $"Chưa thể cập nhật khởi động cùng Windows: {error.Message}");
+        }
     }
 
     private void ExitApplication()
@@ -122,13 +166,25 @@ public partial class App : System.Windows.Application
             MainWindowInstance.Close();
         }
 
+        _agentService?.Dispose();
+        _retailApiClient?.Dispose();
+
         _trayService?.Dispose();
         _trayService = null;
+
         _showWindowWait?.Unregister(null);
         _showWindowEvent?.Dispose();
-        _singleInstanceMutex?.ReleaseMutex();
+
+        try
+        {
+            _singleInstanceMutex?.ReleaseMutex();
+        }
+        catch (ApplicationException)
+        {
+            // Mutex đã được giải phóng.
+        }
+
         _singleInstanceMutex?.Dispose();
         Shutdown();
     }
 }
-

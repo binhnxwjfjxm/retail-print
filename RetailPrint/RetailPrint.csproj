@@ -9,5 +9,10 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <AssemblyName>RetailPrint</AssemblyName>
     <RootNamespace>RetailPrint</RootNamespace>
+    <ApplicationIcon>Assets\RetailPrint.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\RetailPrint.ico" />
+  </ItemGroup>
 </Project>
