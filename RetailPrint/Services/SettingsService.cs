@@ -1,3 +1,4 @@
+﻿using System.IO;
 using System.Text.Json;
 using RetailPrint.Models;
 
@@ -39,3 +40,4 @@ public sealed class SettingsService
         File.WriteAllText(SettingsPath, json);
     }
 }
+

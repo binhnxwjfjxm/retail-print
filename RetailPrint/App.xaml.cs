@@ -1,10 +1,10 @@
-using System.Threading;
+﻿using System.Threading;
 using System.Windows;
 using RetailPrint.Services;
 
 namespace RetailPrint;
 
-public partial class App : Application
+public partial class App : System.Windows.Application
 {
     private const string MutexName = @"Local\RetailPrint.Singleton";
     private const string ShowWindowEventName = @"Local\RetailPrint.ShowWindow";
@@ -31,7 +31,7 @@ public partial class App : Application
             }
             catch
             {
-                // Nếu instance cũ đang thoát, chỉ kết thúc instance mới để tránh chạy trùng.
+                // Náº¿u instance cÅ© Ä‘ang thoÃ¡t, chá»‰ káº¿t thÃºc instance má»›i Ä‘á»ƒ trÃ¡nh cháº¡y trÃ¹ng.
             }
 
             Shutdown();
@@ -92,13 +92,13 @@ public partial class App : Application
         try
         {
             await _printerClient.PrintTestAsync(settings);
-            _trayService?.ShowStatus("Retail Print", "Máy in phản hồi tốt. In thử đã gửi.");
-            MainWindowInstance?.SetConnectionStatus(true, "Sẵn sàng");
+            _trayService?.ShowStatus("Retail Print", "MÃ¡y in pháº£n há»“i tá»‘t. In thá»­ Ä‘Ã£ gá»­i.");
+            MainWindowInstance?.SetConnectionStatus(true, "Sáºµn sÃ ng");
         }
         catch (Exception ex)
         {
-            _trayService?.ShowStatus("Retail Print", $"Không in được: {ex.Message}");
-            MainWindowInstance?.SetConnectionStatus(false, "Không kết nối");
+            _trayService?.ShowStatus("Retail Print", $"KhÃ´ng in Ä‘Æ°á»£c: {ex.Message}");
+            MainWindowInstance?.SetConnectionStatus(false, "KhÃ´ng káº¿t ná»‘i");
         }
     }
 
@@ -131,3 +131,4 @@ public partial class App : Application
         Shutdown();
     }
 }
+

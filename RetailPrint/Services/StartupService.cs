@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.IO;
 using Microsoft.Win32;
 
 namespace RetailPrint.Services;
@@ -32,11 +32,21 @@ public sealed class StartupService
     private static string BuildLaunchCommand()
     {
         var processPath = Environment.ProcessPath
-                          ?? throw new InvalidOperationException("Không xác định được đường dẫn Retail Print.");
+                          ?? throw new InvalidOperationException(
+                              "Không xác định được đường dẫn Retail Print.");
 
-        if (string.Equals(Path.GetFileNameWithoutExtension(processPath), "dotnet", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(
+                Path.GetFileNameWithoutExtension(processPath),
+                "dotnet",
+                StringComparison.OrdinalIgnoreCase))
         {
-            var assemblyPath = Assembly.GetExecutingAssembly().Location;
+            var assemblyName = typeof(StartupService).Assembly.GetName().Name
+                               ?? "RetailPrint";
+
+            var assemblyPath = Path.Combine(
+                AppContext.BaseDirectory,
+                $"{assemblyName}.dll");
+
             return $"\"{processPath}\" \"{assemblyPath}\" --background";
         }
 

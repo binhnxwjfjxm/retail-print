@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Media;
 using RetailPrint.Models;
@@ -43,12 +43,12 @@ public partial class MainWindow : Window
     private PrinterSettings ReadSettingsFromForm()
     {
         if (!int.TryParse(PortTextBox.Text.Trim(), out var port))
-            throw new InvalidOperationException("Cổng máy in chưa đúng.");
+            throw new InvalidOperationException("Cá»•ng mÃ¡y in chÆ°a Ä‘Ãºng.");
 
         var settings = new PrinterSettings
         {
             PrinterName = string.IsNullOrWhiteSpace(PrinterNameTextBox.Text)
-                ? "Máy in quầy"
+                ? "MÃ¡y in quáº§y"
                 : PrinterNameTextBox.Text.Trim(),
             IpAddress = IpTextBox.Text.Trim(),
             Port = port,
@@ -65,10 +65,10 @@ public partial class MainWindow : Window
         try
         {
             TestButton.IsEnabled = false;
-            SetConnectionStatus(null, "Đang kiểm tra...");
+            SetConnectionStatus(null, "Äang kiá»ƒm tra...");
             var settings = ReadSettingsFromForm();
             await _printerClient.PrintTestAsync(settings);
-            SetConnectionStatus(true, "Sẵn sàng");
+            SetConnectionStatus(true, "Sáºµn sÃ ng");
         }
         catch (Exception ex)
         {
@@ -88,7 +88,7 @@ public partial class MainWindow : Window
             _settingsService.Save(settings);
             _startupService.Apply(settings.StartWithWindows);
             StartupPreferenceChanged?.Invoke(settings.StartWithWindows);
-            SetConnectionStatus(null, "Đã lưu");
+            SetConnectionStatus(null, "ÄÃ£ lÆ°u");
         }
         catch (Exception ex)
         {
@@ -104,16 +104,16 @@ public partial class MainWindow : Window
             switch (connected)
             {
                 case true:
-                    StatusBadge.Background = new SolidColorBrush(Color.FromRgb(236, 253, 245));
-                    StatusText.Foreground = new SolidColorBrush(Color.FromRgb(4, 120, 87));
+                    StatusBadge.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(236, 253, 245));
+                    StatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(4, 120, 87));
                     break;
                 case false:
-                    StatusBadge.Background = new SolidColorBrush(Color.FromRgb(254, 242, 242));
-                    StatusText.Foreground = new SolidColorBrush(Color.FromRgb(185, 28, 28));
+                    StatusBadge.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(254, 242, 242));
+                    StatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(185, 28, 28));
                     break;
                 default:
-                    StatusBadge.Background = new SolidColorBrush(Color.FromRgb(238, 242, 247));
-                    StatusText.Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99));
+                    StatusBadge.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(238, 242, 247));
+                    StatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(75, 85, 99));
                     break;
             }
         });
@@ -133,3 +133,4 @@ public partial class MainWindow : Window
         Hide();
     }
 }
+
