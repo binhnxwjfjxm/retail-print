@@ -29,23 +29,27 @@ jobs:
         run: |
           $files = Get-ChildItem RetailPrint -Recurse -File |
             Where-Object { $_.Extension -in '.cs', '.xaml' }
-          $patterns = @(
-            ('M' + [char]0x00C3),
-            ([string][char]0x00C4),
-            ([string][char]0x00C6),
-            (([string][char]0x00E1) + [char]0x00BA),
-            (([string][char]0x00E1) + [char]0x00BB),
-            ([string][char]0xFFFD)
+          $badCodePoints = @(
+            [char]0x00C3,
+            [char]0x00C4,
+            [char]0x00C6,
+            [char]0xFFFD
           )
           $bad = foreach ($file in $files) {
-            foreach ($pattern in $patterns) {
-              Select-String -Path $file.FullName -SimpleMatch -Pattern $pattern
+            $text = Get-Content -Raw -Encoding UTF8 $file.FullName
+            foreach ($char in $badCodePoints) {
+              if ($text.Contains([string]$char)) {
+                [pscustomobject]@{ Path = $file.FullName; Character = ('U+{0:X4}' -f [int]$char) }
+              }
+            }
+            foreach ($code in 0x80..0x9F) {
+              if ($text.Contains([string][char]$code)) {
+                [pscustomobject]@{ Path = $file.FullName; Character = ('U+{0:X4}' -f $code) }
+              }
             }
           }
           if ($bad) {
-            $bad | Sort-Object Path, LineNumber -Unique | ForEach-Object {
-              Write-Error "$($_.Path):$($_.LineNumber) $($_.Line)"
-            }
+            $bad | Sort-Object Path, Character -Unique | Format-Table -AutoSize
             throw 'Phát hiện chuỗi tiếng Việt bị sai mã hóa.'
           }
 
