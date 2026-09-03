@@ -78,13 +78,37 @@ jobs:
         shell: pwsh
         run: |
           $exe = Resolve-Path .\publish\win-x64\RetailPrint.exe
-          $process = Start-Process -FilePath $exe -ArgumentList '--smoke-test' -PassThru -Wait
+          $process = Start-Process -FilePath $exe -ArgumentList '--smoke-test' -PassThru
+          if (-not $process.WaitForExit(20000)) {
+            $process.Kill($true)
+            throw 'RetailPrint.exe bị treo khi smoke-test thành công.'
+          }
           if ($process.ExitCode -ne 0) {
             $log = Join-Path $env:LOCALAPPDATA 'RetailPrint\Logs\startup.log'
             if (Test-Path $log) {
               Get-Content $log -Tail 160
             }
             throw "RetailPrint.exe không khởi động được. Mã $($process.ExitCode)"
+          }
+
+          $log = Join-Path $env:LOCALAPPDATA 'RetailPrint\Logs\startup.log'
+          Remove-Item $log -ErrorAction SilentlyContinue
+          $env:RETAIL_PRINT_SMOKE_FORCE_FAILURE = '1'
+          try {
+            $failure = Start-Process -FilePath $exe -ArgumentList '--smoke-test' -PassThru
+            if (-not $failure.WaitForExit(10000)) {
+              $failure.Kill($true)
+              throw 'Smoke-test lỗi đã mở giao diện hoặc bị treo thay vì thoát không tương tác.'
+            }
+            if ($failure.ExitCode -eq 0) {
+              throw 'Smoke-test lỗi phải trả mã khác 0.'
+            }
+          }
+          finally {
+            Remove-Item Env:RETAIL_PRINT_SMOKE_FORCE_FAILURE -ErrorAction SilentlyContinue
+          }
+          if (-not (Test-Path $log)) {
+            throw 'Smoke-test lỗi không ghi nhật ký khởi động.'
           }
 
       - name: Build per-user installer

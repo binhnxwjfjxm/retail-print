@@ -27,10 +27,11 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         ConfigureExceptionHandling();
+        var smokeTest = HasArgument(e.Args, "--smoke-test");
 
         try
         {
-            if (HasArgument(e.Args, "--smoke-test"))
+            if (smokeTest)
             {
                 base.OnStartup(e);
                 RunSmokeTest();
@@ -42,8 +43,9 @@ public partial class App : System.Windows.Application
         }
         catch (Exception error)
         {
-            CrashLogService.Write(error, "Khởi động ứng dụng");
-            ShowStartupFailure();
+            CrashLogService.Write(error, smokeTest ? "Smoke-test khởi động" : "Khởi động ứng dụng");
+            if (!smokeTest)
+                ShowStartupFailure();
             Shutdown(-1);
         }
     }
@@ -131,6 +133,14 @@ public partial class App : System.Windows.Application
 
     private static void RunSmokeTest()
     {
+        if (string.Equals(
+                Environment.GetEnvironmentVariable("RETAIL_PRINT_SMOKE_FORCE_FAILURE"),
+                "1",
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Smoke-test thất bại có chủ ý để kiểm tra đường xử lý lỗi không tương tác.");
+        }
+
         var smokeDirectory = Path.Combine(
             Path.GetTempPath(),
             $"RetailPrint-Smoke-{Guid.NewGuid():N}");
