@@ -15,7 +15,6 @@ public partial class MainWindow : Window
     private bool _loadingSettings;
 
     public bool AllowClose { get; set; }
-    public event Action<bool>? StartupPreferenceChanged;
 
     public MainWindow(
         SettingsService settingsService,
@@ -98,7 +97,6 @@ public partial class MainWindow : Window
         var settings = ReadSettingsFromForm();
         _settingsService.Save(settings);
         _startupService.Apply(settings.StartWithWindows);
-        StartupPreferenceChanged?.Invoke(settings.StartWithWindows);
     }
 
     private void RefreshWindowsPrinters(string? preferred = null, bool quiet = false)
@@ -202,7 +200,20 @@ public partial class MainWindow : Window
 
         try
         {
-            _ = Dispatcher.BeginInvoke(action);
+            _ = Dispatcher.BeginInvoke(() =>
+            {
+                if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+                    return;
+
+                try
+                {
+                    action();
+                }
+                catch (Exception error)
+                {
+                    CrashLogService.Write(error, "Cập nhật giao diện từ tác vụ nền");
+                }
+            });
         }
         catch (InvalidOperationException)
         {
@@ -248,11 +259,6 @@ public partial class MainWindow : Window
             PairingCodeText.Text = pairing.PairingCode;
             PairingHintText.Text = "Mã cố định. Dùng cùng mã này trên mọi điện thoại Retail.";
         });
-    }
-
-    public void SetStartWithWindows(bool enabled)
-    {
-        DispatchToUi(() => StartupCheckBox.IsChecked = enabled);
     }
 
     private void MainWindow_Closing(object? sender, CancelEventArgs e)

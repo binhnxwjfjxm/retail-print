@@ -11,7 +11,6 @@ public partial class App : System.Windows.Application
     private Mutex? _singleInstanceMutex;
     private EventWaitHandle? _showWindowEvent;
     private RegisteredWaitHandle? _showWindowWait;
-    private TrayService? _trayService;
     private SettingsService? _settingsService;
     private StartupService? _startupService;
     private PrinterClient? _printerClient;
@@ -43,8 +42,9 @@ public partial class App : System.Windows.Application
             {
                 _ = Task.Run(async () =>
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(2));
-                    Dispatcher.Invoke(ExitApplication);
+                    await Task.Delay(TimeSpan.FromSeconds(8));
+                    if (!Dispatcher.HasShutdownStarted && !Dispatcher.HasShutdownFinished)
+                        Dispatcher.Invoke(ExitApplication);
                 });
             }
         }
@@ -94,7 +94,20 @@ public partial class App : System.Windows.Application
 
         _showWindowWait = ThreadPool.RegisterWaitForSingleObject(
             _showWindowEvent,
-            (_, _) => Dispatcher.Invoke(ShowMainWindow),
+            (_, _) =>
+            {
+                if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+                    return;
+
+                try
+                {
+                    _ = Dispatcher.BeginInvoke(ShowMainWindow);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Ứng dụng đang đóng; bỏ tín hiệu gọi cửa sổ đến muộn.
+                }
+            },
             state: null,
             millisecondsTimeOutInterval: Timeout.Infinite,
             executeOnlyOnce: false);
@@ -119,16 +132,6 @@ public partial class App : System.Windows.Application
             _startupService,
             _printerClient,
             _agentService);
-
-        _trayService = new TrayService(
-            showWindow: ShowMainWindow,
-            testPrint: TestPrintFromTrayAsync,
-            setStartWithWindows: SetStartWithWindowsFromTray,
-            exit: ExitApplication,
-            startupEnabled: _startupService.IsEnabled());
-
-        MainWindowInstance.StartupPreferenceChanged += enabled =>
-            _trayService?.SetStartupChecked(enabled);
 
         _agentService.Start();
 
@@ -293,66 +296,24 @@ public partial class App : System.Windows.Application
         MainWindowInstance.Activate();
     }
 
-    private async Task TestPrintFromTrayAsync()
-    {
-        if (_settingsService is null || _printerClient is null)
-            return;
-
-        var settings = _settingsService.Load();
-
-        try
-        {
-            await _printerClient.PrintTestAsync(settings);
-            _trayService?.ShowStatus(
-                "Retail Print",
-                "Phiếu in thử đã được gửi tới máy in đã thiết lập.");
-        }
-        catch (Exception error)
-        {
-            _trayService?.ShowStatus(
-                "Retail Print",
-                $"Không in được: {error.Message}");
-        }
-    }
-
-    private void SetStartWithWindowsFromTray(bool enabled)
-    {
-        if (_settingsService is null || _startupService is null)
-            return;
-
-        var settings = _settingsService.Load();
-        settings.StartWithWindows = enabled;
-
-        try
-        {
-            _startupService.Apply(enabled);
-            _settingsService.Save(settings);
-            MainWindowInstance?.SetStartWithWindows(enabled);
-        }
-        catch (Exception error)
-        {
-            _trayService?.ShowStatus(
-                "Retail Print",
-                $"Chưa thể cập nhật khởi động cùng Windows: {error.Message}");
-        }
-    }
-
     private void ExitApplication()
     {
+        _agentService?.Dispose();
+        _agentService = null;
+
+        _retailApiClient?.Dispose();
+        _retailApiClient = null;
+
         if (MainWindowInstance is not null)
         {
             MainWindowInstance.AllowClose = true;
             MainWindowInstance.Close();
         }
 
-        _agentService?.Dispose();
-        _retailApiClient?.Dispose();
-
-        _trayService?.Dispose();
-        _trayService = null;
-
         _showWindowWait?.Unregister(null);
+        _showWindowWait = null;
         _showWindowEvent?.Dispose();
+        _showWindowEvent = null;
 
         try
         {
@@ -364,6 +325,7 @@ public partial class App : System.Windows.Application
         }
 
         _singleInstanceMutex?.Dispose();
+        _singleInstanceMutex = null;
         Shutdown();
     }
 }
