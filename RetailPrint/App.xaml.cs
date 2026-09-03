@@ -8,9 +8,6 @@ namespace RetailPrint;
 
 public partial class App : System.Windows.Application
 {
-    private const string MutexName = @"Local\RetailPrint.Singleton";
-    private const string ShowWindowEventName = @"Local\RetailPrint.ShowWindow";
-
     private Mutex? _singleInstanceMutex;
     private EventWaitHandle? _showWindowEvent;
     private RegisteredWaitHandle? _showWindowWait;
@@ -28,6 +25,7 @@ public partial class App : System.Windows.Application
     {
         ConfigureExceptionHandling();
         var smokeTest = HasArgument(e.Args, "--smoke-test");
+        var startupProbe = HasArgument(e.Args, "--startup-probe");
 
         try
         {
@@ -40,11 +38,25 @@ public partial class App : System.Windows.Application
             }
 
             StartApplication(e);
+
+            if (startupProbe)
+            {
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2));
+                    Dispatcher.Invoke(ExitApplication);
+                });
+            }
         }
         catch (Exception error)
         {
-            CrashLogService.Write(error, smokeTest ? "Smoke-test khởi động" : "Khởi động ứng dụng");
-            if (!smokeTest)
+            var context = smokeTest
+                ? "Smoke-test khởi động"
+                : startupProbe
+                    ? "Kiểm tra đường khởi động thật"
+                    : "Khởi động ứng dụng";
+            CrashLogService.Write(error, context);
+            if (!smokeTest && !startupProbe)
                 ShowStartupFailure();
             Shutdown(-1);
         }
@@ -54,14 +66,14 @@ public partial class App : System.Windows.Application
     {
         _singleInstanceMutex = new Mutex(
             initiallyOwned: true,
-            MutexName,
+            WindowsRuntimeNames.SingletonMutex,
             out var createdNew);
 
         if (!createdNew)
         {
             try
             {
-                using var signal = EventWaitHandle.OpenExisting(ShowWindowEventName);
+                using var signal = EventWaitHandle.OpenExisting(WindowsRuntimeNames.ShowWindowEvent);
                 signal.Set();
             }
             catch
@@ -78,7 +90,7 @@ public partial class App : System.Windows.Application
         _showWindowEvent = new EventWaitHandle(
             false,
             EventResetMode.AutoReset,
-            ShowWindowEventName);
+            WindowsRuntimeNames.ShowWindowEvent);
 
         _showWindowWait = ThreadPool.RegisterWaitForSingleObject(
             _showWindowEvent,
@@ -187,6 +199,7 @@ public partial class App : System.Windows.Application
             }
 
             var startupService = new StartupService();
+            startupService.Apply(false);
             var printerClient = new PrinterClient();
             using var retailApiClient = new RetailApiClient();
             using var agentService = new RetailAgentService(
