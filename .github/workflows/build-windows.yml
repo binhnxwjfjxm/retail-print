@@ -146,42 +146,53 @@ jobs:
         shell: pwsh
         run: |
           $installer = Resolve-Path .\publish\installer\RetailPrint-Setup-win-x64.exe
+          $sourceExe = Resolve-Path .\publish\win-x64\RetailPrint.exe
           $installDir = Join-Path $env:LOCALAPPDATA 'RetailPrint-CI-Installed'
+          $installerLog = Join-Path $env:RUNNER_TEMP 'retail-print-installer.log'
           Remove-Item $installDir -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item $installerLog -Force -ErrorAction SilentlyContinue
 
           $install = Start-Process -FilePath $installer -ArgumentList @(
             '/VERYSILENT',
             '/SUPPRESSMSGBOXES',
             '/NORESTART',
             '/SP-',
-            "/DIR=$installDir"
+            "/DIR=$installDir",
+            "/LOG=$installerLog"
           ) -PassThru
           if (-not $install.WaitForExit(30000)) {
             $install.Kill($true)
+            if (Test-Path $installerLog) { Get-Content $installerLog -Tail 200 }
             throw 'Bộ cài Retail Print bị treo khi cài đặt.'
           }
           if ($install.ExitCode -ne 0) {
+            if (Test-Path $installerLog) { Get-Content $installerLog -Tail 200 }
             throw "Bộ cài Retail Print trả mã lỗi $($install.ExitCode)."
           }
 
           $installedExe = Join-Path $installDir 'RetailPrint.exe'
           if (-not (Test-Path $installedExe)) {
+            if (Test-Path $installerLog) { Get-Content $installerLog -Tail 200 }
             throw 'Bộ cài chạy xong nhưng không có RetailPrint.exe trong thư mục cài.'
+          }
+
+          $sourceHash = (Get-FileHash $sourceExe -Algorithm SHA256).Hash
+          $installedHash = (Get-FileHash $installedExe -Algorithm SHA256).Hash
+          if ($sourceHash -ne $installedHash) {
+            throw 'RetailPrint.exe sau cài không khớp file đã build.'
           }
 
           $log = Join-Path $env:LOCALAPPDATA 'RetailPrint\Logs\startup.log'
           Remove-Item $log -ErrorAction SilentlyContinue
-          $app = Start-Process -FilePath $installedExe -ArgumentList '--startup-probe' -PassThru
-          if (-not $app.WaitForExit(20000)) {
-            $app.Kill($true)
-            throw 'Retail Print bản đã cài bị treo khi mở.'
+          $app = Start-Process -FilePath $installedExe -PassThru
+          Start-Sleep -Seconds 5
+          if ($app.HasExited) {
+            if (Test-Path $log) { Get-Content $log -Tail 160 }
+            throw "Retail Print bản đã cài tự thoát khi mở. Mã $($app.ExitCode)"
           }
-          if ($app.ExitCode -ne 0) {
-            if (Test-Path $log) {
-              Get-Content $log -Tail 160
-            }
-            throw "Retail Print bản đã cài không mở được. Mã $($app.ExitCode)"
-          }
+
+          $app.Kill($true)
+          $app.WaitForExit(10000) | Out-Null
 
           $uninstaller = Join-Path $installDir 'unins000.exe'
           if (-not (Test-Path $uninstaller)) {
