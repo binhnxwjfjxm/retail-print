@@ -162,7 +162,7 @@ public partial class App : System.Windows.Application
             args.Handled = true;
             try
             {
-                MessageBox.Show(
+                System.Windows.MessageBox.Show(
                     $"Retail Print gặp lỗi và cần đóng. Nhật ký lỗi được lưu tại:\n{CrashLogService.StartupLogPath}",
                     "Retail Print",
                     MessageBoxButton.OK,
@@ -189,7 +189,7 @@ public partial class App : System.Windows.Application
     {
         try
         {
-            MessageBox.Show(
+            System.Windows.MessageBox.Show(
                 $"Retail Print không thể khởi động. Nhật ký lỗi được lưu tại:\n{CrashLogService.StartupLogPath}",
                 "Retail Print",
                 MessageBoxButton.OK,

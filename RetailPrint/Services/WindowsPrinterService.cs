@@ -94,6 +94,8 @@ public sealed class WindowsPrinterService
         document.PrintPage += (_, args) =>
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var graphics = args.Graphics
+                           ?? throw new InvalidOperationException("Windows chưa tạo được vùng in cho máy in đã chọn.");
 
             var bounds = args.MarginBounds.Width > 0 && args.MarginBounds.Height > 0
                 ? args.MarginBounds
@@ -101,14 +103,14 @@ public sealed class WindowsPrinterService
             var availableWidth = Math.Max(1, bounds.Width);
             var maxCharacters = paperWidthMm == 58 ? 32 : 48;
 
-            using var font = CreateFittedFont(args.Graphics, paperWidthMm, maxCharacters, availableWidth);
+            using var font = CreateFittedFont(graphics, paperWidthMm, maxCharacters, availableWidth);
             using var format = new StringFormat(StringFormat.GenericTypographic)
             {
                 FormatFlags = StringFormatFlags.NoWrap,
                 Trimming = StringTrimming.None
             };
 
-            var lineHeight = Math.Max(font.GetHeight(args.Graphics) + 2f, 10f);
+            var lineHeight = Math.Max(font.GetHeight(graphics) + 2f, 10f);
             var y = (float)bounds.Top;
             var bottom = (float)bounds.Bottom;
 
@@ -120,7 +122,7 @@ public sealed class WindowsPrinterService
                     return;
                 }
 
-                args.Graphics.DrawString(
+                graphics.DrawString(
                     lines[lineIndex],
                     font,
                     Brushes.Black,

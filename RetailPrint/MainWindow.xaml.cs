@@ -232,16 +232,16 @@ public partial class MainWindow : Window
             switch (connected)
             {
                 case true:
-                    RetailStatusBadge.Background = new SolidColorBrush(Color.FromRgb(236, 253, 245));
-                    RetailStatusText.Foreground = new SolidColorBrush(Color.FromRgb(4, 120, 87));
+                    RetailStatusBadge.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(236, 253, 245));
+                    RetailStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(4, 120, 87));
                     break;
                 case false:
-                    RetailStatusBadge.Background = new SolidColorBrush(Color.FromRgb(254, 242, 242));
-                    RetailStatusText.Foreground = new SolidColorBrush(Color.FromRgb(185, 28, 28));
+                    RetailStatusBadge.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(254, 242, 242));
+                    RetailStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(185, 28, 28));
                     break;
                 default:
-                    RetailStatusBadge.Background = new SolidColorBrush(Color.FromRgb(238, 242, 247));
-                    RetailStatusText.Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99));
+                    RetailStatusBadge.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(238, 242, 247));
+                    RetailStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(75, 85, 99));
                     break;
             }
         });
