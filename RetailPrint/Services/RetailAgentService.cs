@@ -12,6 +12,7 @@ public sealed class RetailAgentService : IDisposable
     private readonly object _pairingGate = new();
     private readonly SemaphoreSlim _connectionCodeGate = new(1, 1);
     private PairingResult? _currentPairing;
+    private string? _currentPairingDeviceId;
     private CancellationTokenSource? _cancellation;
     private Task? _loopTask;
 
@@ -34,30 +35,56 @@ public sealed class RetailAgentService : IDisposable
         _loopTask = Task.Run(() => RunAsync(_cancellation.Token));
     }
 
+    internal static bool ConnectionCodeMatchesDevice(string? cachedDeviceId, DeviceIdentity identity) =>
+        !string.IsNullOrWhiteSpace(cachedDeviceId)
+        && string.Equals(cachedDeviceId, identity.DeviceId, StringComparison.OrdinalIgnoreCase);
+
+    private PairingResult? ReadCachedConnectionCode(DeviceIdentity identity, out bool invalidated)
+    {
+        lock (_pairingGate)
+        {
+            invalidated = _currentPairing is not null
+                && !ConnectionCodeMatchesDevice(_currentPairingDeviceId, identity);
+
+            if (invalidated)
+            {
+                _currentPairing = null;
+                _currentPairingDeviceId = null;
+                return null;
+            }
+
+            return _currentPairing is not null
+                && !string.IsNullOrWhiteSpace(_currentPairing.PairingCode)
+                && ConnectionCodeMatchesDevice(_currentPairingDeviceId, identity)
+                    ? _currentPairing
+                    : null;
+        }
+    }
+
     private async Task<PairingResult> EnsureConnectionCodeAsync(
         DeviceIdentity identity,
         CancellationToken cancellationToken)
     {
-        lock (_pairingGate)
-        {
-            if (_currentPairing is not null && !string.IsNullOrWhiteSpace(_currentPairing.PairingCode))
-                return _currentPairing;
-        }
+        var cached = ReadCachedConnectionCode(identity, out var invalidated);
+        if (invalidated) PairingChanged?.Invoke(null);
+        if (cached is not null) return cached;
 
         await _connectionCodeGate.WaitAsync(cancellationToken);
         try
         {
-            lock (_pairingGate)
-            {
-                if (_currentPairing is not null && !string.IsNullOrWhiteSpace(_currentPairing.PairingCode))
-                    return _currentPairing;
-            }
+            cached = ReadCachedConnectionCode(identity, out invalidated);
+            if (invalidated) PairingChanged?.Invoke(null);
+            if (cached is not null) return cached;
 
             var deviceName = $"Retail Print - {Environment.MachineName}";
             if (deviceName.Length > 120) deviceName = deviceName[..120];
             SetStatus(null, "Đang tải mã kết nối…");
             var pairing = await _apiClient.GetConnectionCodeAsync(identity, deviceName, cancellationToken);
-            lock (_pairingGate) _currentPairing = pairing;
+            lock (_pairingGate)
+            {
+                _currentPairing = pairing;
+                _currentPairingDeviceId = identity.DeviceId;
+            }
             PairingChanged?.Invoke(pairing);
             SetStatus(null, "Mã kết nối đã sẵn sàng");
             return pairing;
