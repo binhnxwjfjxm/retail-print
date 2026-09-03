@@ -53,7 +53,7 @@ public sealed class RetailApiClient : IDisposable
         };
     }
 
-    public async Task<PairingResult> StartPairingAsync(
+    public async Task<PairingResult> GetConnectionCodeAsync(
         DeviceIdentity identity,
         string deviceName,
         CancellationToken cancellationToken = default)

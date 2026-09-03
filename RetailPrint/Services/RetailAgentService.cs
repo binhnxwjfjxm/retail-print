@@ -10,7 +10,9 @@ public sealed class RetailAgentService : IDisposable
     private readonly PrinterClient _printerClient;
     private readonly PrintJobJournal _journal;
     private readonly object _pairingGate = new();
+    private readonly SemaphoreSlim _connectionCodeGate = new(1, 1);
     private PairingResult? _currentPairing;
+    private string? _currentPairingDeviceId;
     private CancellationTokenSource? _cancellation;
     private Task? _loopTask;
 
@@ -33,17 +35,64 @@ public sealed class RetailAgentService : IDisposable
         _loopTask = Task.Run(() => RunAsync(_cancellation.Token));
     }
 
-    public async Task<PairingResult> CreatePairingCodeAsync(CancellationToken cancellationToken = default)
+    internal static bool ConnectionCodeMatchesDevice(string? cachedDeviceId, DeviceIdentity identity) =>
+        !string.IsNullOrWhiteSpace(cachedDeviceId)
+        && string.Equals(cachedDeviceId, identity.DeviceId, StringComparison.OrdinalIgnoreCase);
+
+    private PairingResult? ReadCachedConnectionCode(DeviceIdentity identity, out bool invalidated)
     {
-        var identity = _identityService.LoadOrCreate();
-        var deviceName = $"Retail Print - {Environment.MachineName}";
-        if (deviceName.Length > 120) deviceName = deviceName[..120];
-        SetStatus(null, "Đang lấy mã kết nối…");
-        var pairing = await _apiClient.StartPairingAsync(identity, deviceName, cancellationToken);
-        lock (_pairingGate) _currentPairing = pairing;
-        PairingChanged?.Invoke(pairing);
-        SetStatus(null, "Chờ nhập mã trên Retail");
-        return pairing;
+        lock (_pairingGate)
+        {
+            invalidated = _currentPairing is not null
+                && !ConnectionCodeMatchesDevice(_currentPairingDeviceId, identity);
+
+            if (invalidated)
+            {
+                _currentPairing = null;
+                _currentPairingDeviceId = null;
+                return null;
+            }
+
+            return _currentPairing is not null
+                && !string.IsNullOrWhiteSpace(_currentPairing.PairingCode)
+                && ConnectionCodeMatchesDevice(_currentPairingDeviceId, identity)
+                    ? _currentPairing
+                    : null;
+        }
+    }
+
+    private async Task<PairingResult> EnsureConnectionCodeAsync(
+        DeviceIdentity identity,
+        CancellationToken cancellationToken)
+    {
+        var cached = ReadCachedConnectionCode(identity, out var invalidated);
+        if (invalidated) PairingChanged?.Invoke(null);
+        if (cached is not null) return cached;
+
+        await _connectionCodeGate.WaitAsync(cancellationToken);
+        try
+        {
+            cached = ReadCachedConnectionCode(identity, out invalidated);
+            if (invalidated) PairingChanged?.Invoke(null);
+            if (cached is not null) return cached;
+
+            var deviceName = $"Retail Print - {Environment.MachineName}";
+            if (deviceName.Length > 120) deviceName = deviceName[..120];
+            SetStatus(null, "Đang tải mã kết nối…");
+            var pairing = await _apiClient.GetConnectionCodeAsync(identity, deviceName, cancellationToken);
+            lock (_pairingGate)
+            {
+                _currentPairing = pairing;
+                _currentPairingDeviceId = identity.DeviceId;
+            }
+            PairingChanged?.Invoke(pairing);
+            SetStatus(null, "Mã kết nối đã sẵn sàng");
+            return pairing;
+        }
+        finally
+        {
+            _connectionCodeGate.Release();
+        }
     }
 
     private async Task RunAsync(CancellationToken cancellationToken)
@@ -55,15 +104,15 @@ public sealed class RetailAgentService : IDisposable
             var settings = _settingsService.Load();
             try
             {
+                await EnsureConnectionCodeAsync(identity, cancellationToken);
                 await _apiClient.HeartbeatAsync(identity, settings, cancellationToken);
-                ClearPairingIfConnected();
                 SetStatus(true, "Retail đang trực tuyến");
                 var job = await _apiClient.ClaimJobAsync(identity, 20, cancellationToken);
                 if (job is not null) await ProcessJobAsync(identity, settings, job, cancellationToken);
             }
             catch (RetailApiException error) when (error.IsUnauthorized)
             {
-                SetStatus(false, WaitingForPairing() ? "Chờ nhập mã trên Retail" : "Chưa kết nối Retail");
+                SetStatus(false, "Chưa kết nối Retail — nhập mã 8 ký tự trên điện thoại");
                 await DelayAsync(TimeSpan.FromSeconds(3), cancellationToken);
             }
             catch (RetailApiException error)
@@ -132,27 +181,6 @@ public sealed class RetailAgentService : IDisposable
         catch (RetailApiException) { }
     }
 
-    private bool WaitingForPairing()
-    {
-        PairingResult? expired = null;
-        lock (_pairingGate)
-        {
-            if (_currentPairing?.ExpiresAt is not DateTimeOffset expiresAt) return _currentPairing is not null;
-            if (expiresAt > DateTimeOffset.UtcNow) return true;
-            expired = _currentPairing;
-            _currentPairing = null;
-        }
-        if (expired is not null) PairingChanged?.Invoke(null);
-        return false;
-    }
-
-    private void ClearPairingIfConnected()
-    {
-        PairingResult? cleared;
-        lock (_pairingGate) { cleared = _currentPairing; _currentPairing = null; }
-        if (cleared is not null) PairingChanged?.Invoke(null);
-    }
-
     private void SetStatus(bool? connected, string text) => StatusChanged?.Invoke(connected, text);
 
     private static string SafePrinterMessage(string message)
@@ -175,5 +203,6 @@ public sealed class RetailAgentService : IDisposable
         _cancellation.Dispose();
         _cancellation = null;
         _loopTask = null;
+        _connectionCodeGate.Dispose();
     }
 }

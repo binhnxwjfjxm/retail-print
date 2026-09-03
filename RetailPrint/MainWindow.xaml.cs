@@ -195,34 +195,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void PairButton_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            PairButton.IsEnabled = false;
-            SaveCurrentSettings();
-            PairingCodeText.Text = "Đang lấy…";
-            PairingHintText.Text = "Đang tạo mã kết nối với Retail.";
-
-            var pairing = await _agentService.CreatePairingCodeAsync();
-            SetPairing(pairing);
-        }
-        catch (RetailApiException error)
-        {
-            PairingCodeText.Text = "Chưa có mã";
-            PairingHintText.Text = error.Message;
-        }
-        catch (Exception error)
-        {
-            PairingCodeText.Text = "Chưa có mã";
-            PairingHintText.Text = error.Message;
-        }
-        finally
-        {
-            PairButton.IsEnabled = true;
-        }
-    }
-
     public void SetRetailStatus(bool? connected, string text)
     {
         Dispatcher.Invoke(() =>
@@ -251,15 +223,15 @@ public partial class MainWindow : Window
     {
         Dispatcher.Invoke(() =>
         {
-            if (pairing is null)
+            if (pairing is null || string.IsNullOrWhiteSpace(pairing.PairingCode))
             {
-                PairingCodeText.Text = "Đã kết nối";
-                PairingHintText.Text = "Retail Print đang nhận lệnh in từ Công Ty.";
+                PairingCodeText.Text = "Đang tải mã…";
+                PairingHintText.Text = "Mã cố định của máy này sẽ tự hiện khi kết nối được Công Ty.";
                 return;
             }
 
             PairingCodeText.Text = pairing.PairingCode;
-            PairingHintText.Text = "Nhập mã này trên Retail. Mã dùng một lần, hiệu lực 10 phút.";
+            PairingHintText.Text = "Mã cố định. Dùng cùng mã này trên mọi điện thoại Retail.";
         });
     }
 

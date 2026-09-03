@@ -175,6 +175,17 @@ public partial class App : System.Windows.Application
                 throw new InvalidOperationException("Cấu hình IP cũ không được giữ nguyên khi nâng cấp.");
             }
 
+            var identity = new DeviceIdentity
+            {
+                DeviceId = "9f7ad5b0-5641-4a19-9a8f-7b64b2a8ea03",
+                Credential = new string('a', 48)
+            };
+            if (!RetailAgentService.ConnectionCodeMatchesDevice(identity.DeviceId, identity)
+                || RetailAgentService.ConnectionCodeMatchesDevice("a41f4bce-83be-4e13-ae28-31bfe89cfa4a", identity))
+            {
+                throw new InvalidOperationException("Mã kết nối cũ phải bị bỏ khi deviceId của máy thay đổi.");
+            }
+
             var startupService = new StartupService();
             var printerClient = new PrinterClient();
             using var retailApiClient = new RetailApiClient();

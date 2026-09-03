@@ -8,8 +8,10 @@
 2. Mở Retail Print.
 3. Chọn `Máy in trên Windows` để dùng máy in đã có trong `Printers & scanners`.
 4. Chọn máy in, khổ giấy 80/58 mm và bấm `In thử`.
-5. Bấm `Lấy mã`, sau đó nhập mã 8 ký tự trong `Thiết lập máy in` trên Retail.
-6. Khi Retail Print báo trực tuyến, Retail có thể gửi lệnh in.
+5. Retail Print tự hiện một mã kết nối 8 ký tự cố định của máy Windows này.
+6. Trên bất kỳ điện thoại Retail nào, nhập đúng mã 8 ký tự đó để kết nối cùng máy Windows.
+
+Mã kết nối không mất sau lần nhập đầu tiên, không hết hạn và không cần tạo lại. Cùng một máy Windows luôn dùng cùng mã theo `deviceId` của Retail Print trên máy đó.
 
 Retail không cần biết máy in đang dùng USB, LAN, Wi-Fi hay máy in được chia sẻ. Nếu Windows đã cài và in được thì Retail Print có thể chọn máy đó.
 
