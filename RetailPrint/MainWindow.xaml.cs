@@ -195,9 +195,24 @@ public partial class MainWindow : Window
         }
     }
 
+    private void DispatchToUi(Action action)
+    {
+        if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+            return;
+
+        try
+        {
+            _ = Dispatcher.BeginInvoke(action);
+        }
+        catch (InvalidOperationException)
+        {
+            // Ứng dụng đang đóng; bỏ cập nhật trạng thái muộn từ luồng nền.
+        }
+    }
+
     public void SetRetailStatus(bool? connected, string text)
     {
-        Dispatcher.Invoke(() =>
+        DispatchToUi(() =>
         {
             RetailStatusText.Text = text;
 
@@ -221,7 +236,7 @@ public partial class MainWindow : Window
 
     public void SetPairing(PairingResult? pairing)
     {
-        Dispatcher.Invoke(() =>
+        DispatchToUi(() =>
         {
             if (pairing is null || string.IsNullOrWhiteSpace(pairing.PairingCode))
             {
@@ -237,7 +252,7 @@ public partial class MainWindow : Window
 
     public void SetStartWithWindows(bool enabled)
     {
-        Dispatcher.Invoke(() => StartupCheckBox.IsChecked = enabled);
+        DispatchToUi(() => StartupCheckBox.IsChecked = enabled);
     }
 
     private void MainWindow_Closing(object? sender, CancelEventArgs e)
