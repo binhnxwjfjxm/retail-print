@@ -11,7 +11,7 @@
         MaxHeight="760"
         ResizeMode="CanMinimize"
         WindowStartupLocation="CenterScreen"
-        ShowInTaskbar="False"
+        ShowInTaskbar="True"
         Background="#F5F6F8"
         FontFamily="Segoe UI"
         FontSize="13"
@@ -144,7 +144,7 @@
                 </Grid>
 
                 <Border Margin="0,14,0,0" Padding="10,8" CornerRadius="7" Background="#F8FAFC">
-                    <TextBlock x:Name="PrinterStatusText" Text="Chọn máy in, in thử rồi lưu. Đóng cửa sổ sẽ thu nhỏ xuống khay hệ thống." FontSize="11" Foreground="#6B7280" TextWrapping="Wrap" />
+                    <TextBlock x:Name="PrinterStatusText" Text="Chọn máy in, in thử rồi lưu. Đóng cửa sổ vẫn giữ Retail Print chạy; mở shortcut để hiện lại." FontSize="11" Foreground="#6B7280" TextWrapping="Wrap" />
                 </Border>
 
                 <TextBlock Text="Cấu hình máy in chỉ lưu trên máy Windows này." Margin="0,10,0,0" FontSize="10.5" Foreground="#9CA3AF" HorizontalAlignment="Center" />

@@ -13,7 +13,7 @@ permissions:
 jobs:
   build-windows:
     runs-on: windows-2022
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -62,6 +62,7 @@ jobs:
       - name: Publish Windows x64
         shell: pwsh
         run: |
+          Remove-Item .\publish\win-x64 -Recurse -Force -ErrorAction SilentlyContinue
           dotnet publish .\RetailPrint\RetailPrint.csproj `
             -c Release `
             -r win-x64 `
@@ -72,6 +73,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path .\publish\win-x64\RetailPrint.exe)) {
             throw 'Không tạo được RetailPrint.exe.'
+          }
+          $looseDlls = Get-ChildItem .\publish\win-x64 -File -Filter '*.dll'
+          if ($looseDlls) {
+            $looseDlls | Select-Object Name, Length | Format-Table -AutoSize
+            throw 'Gói single-file còn DLL rời; installer không được phép đóng gói thiếu thư viện native.'
           }
 
       - name: Smoke test packaged app
@@ -85,9 +91,7 @@ jobs:
           }
           if ($process.ExitCode -ne 0) {
             $log = Join-Path $env:LOCALAPPDATA 'RetailPrint\Logs\startup.log'
-            if (Test-Path $log) {
-              Get-Content $log -Tail 160
-            }
+            if (Test-Path $log) { Get-Content $log -Tail 160 }
             throw "RetailPrint.exe không khởi động được. Mã $($process.ExitCode)"
           }
 
@@ -111,6 +115,41 @@ jobs:
             throw 'Smoke-test lỗi không ghi nhật ký khởi động.'
           }
 
+      - name: Probe real packaged startup
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path .\publish\win-x64\RetailPrint.exe
+          $log = Join-Path $env:LOCALAPPDATA 'RetailPrint\Logs\startup.log'
+          Remove-Item $log -ErrorAction SilentlyContinue
+          $process = Start-Process -FilePath $exe -ArgumentList '--startup-probe' -PassThru
+          if (-not $process.WaitForExit(25000)) {
+            $process.Kill($true)
+            throw 'RetailPrint.exe bị treo trên đường khởi động thật.'
+          }
+          if ($process.ExitCode -ne 0) {
+            if (Test-Path $log) { Get-Content $log -Tail 160 }
+            throw "RetailPrint.exe lỗi trên đường khởi động thật. Mã $($process.ExitCode)"
+          }
+
+      - name: Keep normal packaged app alive
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path .\publish\win-x64\RetailPrint.exe
+          $log = Join-Path $env:LOCALAPPDATA 'RetailPrint\Logs\startup.log'
+          Remove-Item $log -ErrorAction SilentlyContinue
+          $app = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 8
+          if ($app.HasExited) {
+            if (Test-Path $log) { Get-Content $log -Tail 160 }
+            Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = (Get-Date).AddMinutes(-2) } -ErrorAction SilentlyContinue |
+              Where-Object { $_.Message -like '*RetailPrint*' } |
+              Select-Object -First 8 TimeCreated, Id, ProviderName, Message |
+              Format-List
+            throw "RetailPrint.exe tự thoát khi chạy bình thường. Mã $($app.ExitCode)"
+          }
+          $app.Kill($true)
+          $app.WaitForExit(10000) | Out-Null
+
       - name: Build per-user installer
         shell: pwsh
         run: |
@@ -122,6 +161,79 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path .\publish\installer\RetailPrint-Setup-win-x64.exe)) {
             throw 'Không tạo được RetailPrint-Setup-win-x64.exe.'
+          }
+
+      - name: Install, open and uninstall built installer
+        shell: pwsh
+        run: |
+          $installer = Resolve-Path .\publish\installer\RetailPrint-Setup-win-x64.exe
+          $sourceExe = Resolve-Path .\publish\win-x64\RetailPrint.exe
+          $installDir = Join-Path $env:LOCALAPPDATA 'RetailPrint-CI-Installed'
+          $installerLog = Join-Path $env:RUNNER_TEMP 'retail-print-installer.log'
+          Remove-Item $installDir -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item $installerLog -Force -ErrorAction SilentlyContinue
+
+          $install = Start-Process -FilePath $installer -ArgumentList @(
+            '/VERYSILENT',
+            '/SUPPRESSMSGBOXES',
+            '/NORESTART',
+            '/SP-',
+            "/DIR=$installDir",
+            "/LOG=$installerLog"
+          ) -PassThru
+          if (-not $install.WaitForExit(30000)) {
+            $install.Kill($true)
+            if (Test-Path $installerLog) { Get-Content $installerLog -Tail 200 }
+            throw 'Bộ cài Retail Print bị treo khi cài đặt.'
+          }
+          if ($install.ExitCode -ne 0) {
+            if (Test-Path $installerLog) { Get-Content $installerLog -Tail 200 }
+            throw "Bộ cài Retail Print trả mã lỗi $($install.ExitCode)."
+          }
+
+          $installedExe = Join-Path $installDir 'RetailPrint.exe'
+          if (-not (Test-Path $installedExe)) {
+            if (Test-Path $installerLog) { Get-Content $installerLog -Tail 200 }
+            throw 'Bộ cài chạy xong nhưng không có RetailPrint.exe trong thư mục cài.'
+          }
+
+          $sourceHash = (Get-FileHash $sourceExe -Algorithm SHA256).Hash
+          $installedHash = (Get-FileHash $installedExe -Algorithm SHA256).Hash
+          if ($sourceHash -ne $installedHash) {
+            throw 'RetailPrint.exe sau cài không khớp file đã build.'
+          }
+
+          $log = Join-Path $env:LOCALAPPDATA 'RetailPrint\Logs\startup.log'
+          Remove-Item $log -ErrorAction SilentlyContinue
+          $app = Start-Process -FilePath $installedExe -PassThru
+          Start-Sleep -Seconds 8
+          if ($app.HasExited) {
+            if (Test-Path $log) { Get-Content $log -Tail 160 }
+            Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = (Get-Date).AddMinutes(-2) } -ErrorAction SilentlyContinue |
+              Where-Object { $_.Message -like '*RetailPrint*' } |
+              Select-Object -First 8 TimeCreated, Id, ProviderName, Message |
+              Format-List
+            throw "Retail Print bản đã cài tự thoát khi mở. Mã $($app.ExitCode)"
+          }
+
+          $app.Kill($true)
+          $app.WaitForExit(10000) | Out-Null
+
+          $uninstaller = Join-Path $installDir 'unins000.exe'
+          if (-not (Test-Path $uninstaller)) {
+            throw 'Không tìm thấy chương trình gỡ cài đặt.'
+          }
+          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @(
+            '/VERYSILENT',
+            '/SUPPRESSMSGBOXES',
+            '/NORESTART'
+          ) -PassThru
+          if (-not $uninstall.WaitForExit(30000)) {
+            $uninstall.Kill($true)
+            throw 'Bộ gỡ Retail Print bị treo.'
+          }
+          if ($uninstall.ExitCode -ne 0) {
+            throw "Bộ gỡ Retail Print trả mã lỗi $($uninstall.ExitCode)."
           }
 
       - name: Upload Retail Print package

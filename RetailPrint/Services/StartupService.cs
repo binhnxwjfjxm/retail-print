@@ -5,14 +5,13 @@ namespace RetailPrint.Services;
 
 public sealed class StartupService
 {
-    private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "RetailPrint";
 
     public bool IsEnabled()
     {
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: false);
+            using var key = Registry.CurrentUser.OpenSubKey(WindowsRuntimeNames.StartupRunKey, writable: false);
             return key?.GetValue(ValueName) is string value && !string.IsNullOrWhiteSpace(value);
         }
         catch
@@ -23,8 +22,8 @@ public sealed class StartupService
 
     public void Apply(bool enabled)
     {
-        using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true)
-                        ?? Registry.CurrentUser.CreateSubKey(RunKeyPath, writable: true);
+        using var key = Registry.CurrentUser.OpenSubKey(WindowsRuntimeNames.StartupRunKey, writable: true)
+                        ?? Registry.CurrentUser.CreateSubKey(WindowsRuntimeNames.StartupRunKey, writable: true);
 
         if (enabled)
         {
