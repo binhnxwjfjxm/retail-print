@@ -1,5 +1,7 @@
+using System.IO;
 using System.Threading;
 using System.Windows;
+using RetailPrint.Models;
 using RetailPrint.Services;
 
 namespace RetailPrint;
@@ -129,26 +131,72 @@ public partial class App : System.Windows.Application
 
     private static void RunSmokeTest()
     {
-        var settingsService = new SettingsService();
-        var startupService = new StartupService();
-        var printerClient = new PrinterClient();
-        using var retailApiClient = new RetailApiClient();
-        using var agentService = new RetailAgentService(
-            settingsService,
-            new DeviceIdentityService(),
-            retailApiClient,
-            printerClient,
-            new PrintJobJournal());
+        var smokeDirectory = Path.Combine(
+            Path.GetTempPath(),
+            $"RetailPrint-Smoke-{Guid.NewGuid():N}");
 
-        var window = new MainWindow(
-            settingsService,
-            startupService,
-            printerClient,
-            agentService)
+        try
         {
-            AllowClose = true
-        };
-        window.Close();
+            var settingsService = new SettingsService(smokeDirectory);
+
+            var freshSettings = settingsService.Load();
+            if (!freshSettings.UsesWindowsPrinter || freshSettings.SettingsVersion != 2)
+                throw new InvalidOperationException("Cấu hình cài mới không mặc định dùng máy in Windows.");
+
+            Directory.CreateDirectory(smokeDirectory);
+            File.WriteAllText(
+                Path.Combine(smokeDirectory, "settings.json"),
+                """
+                {
+                  "PrinterName": "Máy in quầy",
+                  "IpAddress": "192.168.1.77",
+                  "Port": 9100,
+                  "PaperWidthMm": 80,
+                  "StartWithWindows": false
+                }
+                """);
+
+            var legacySettings = settingsService.Load();
+            if (legacySettings.UsesWindowsPrinter
+                || legacySettings.SettingsVersion != 2
+                || legacySettings.IpAddress != "192.168.1.77"
+                || legacySettings.Port != 9100)
+            {
+                throw new InvalidOperationException("Cấu hình IP cũ không được giữ nguyên khi nâng cấp.");
+            }
+
+            var startupService = new StartupService();
+            var printerClient = new PrinterClient();
+            using var retailApiClient = new RetailApiClient();
+            using var agentService = new RetailAgentService(
+                settingsService,
+                new DeviceIdentityService(),
+                retailApiClient,
+                printerClient,
+                new PrintJobJournal());
+
+            var window = new MainWindow(
+                settingsService,
+                startupService,
+                printerClient,
+                agentService)
+            {
+                AllowClose = true
+            };
+            window.Close();
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(smokeDirectory))
+                    Directory.Delete(smokeDirectory, recursive: true);
+            }
+            catch
+            {
+                // Thư mục kiểm thử tạm không được phép làm smoke-test thất bại.
+            }
+        }
     }
 
     private void ConfigureExceptionHandling()

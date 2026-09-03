@@ -10,7 +10,9 @@ public static class PrinterConnectionModes
 
 public sealed class PrinterSettings
 {
-    public int SettingsVersion { get; set; } = 2;
+    // 0 có chủ ý: file cấu hình cũ không có trường này phải được nhận diện
+    // là cấu hình đời trước và giữ đường in IP sau khi nâng cấp.
+    public int SettingsVersion { get; set; } = 0;
     public string ConnectionMode { get; set; } = PrinterConnectionModes.Windows;
     public string PrinterName { get; set; } = "";
     public string WindowsPrinterName { get; set; } = "";

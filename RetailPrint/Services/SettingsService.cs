@@ -12,19 +12,25 @@ public sealed class SettingsService
     {
         WriteIndented = true
     };
+    private readonly string _settingsDirectory;
 
-    private string SettingsDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "RetailPrint");
+    public SettingsService(string? settingsDirectory = null)
+    {
+        _settingsDirectory = string.IsNullOrWhiteSpace(settingsDirectory)
+            ? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "RetailPrint")
+            : settingsDirectory;
+    }
 
-    private string SettingsPath => Path.Combine(SettingsDirectory, "settings.json");
+    private string SettingsPath => Path.Combine(_settingsDirectory, "settings.json");
 
     public PrinterSettings Load()
     {
         try
         {
             if (!File.Exists(SettingsPath))
-                return Normalize(new PrinterSettings());
+                return Normalize(new PrinterSettings { SettingsVersion = CurrentSettingsVersion });
 
             var json = File.ReadAllText(SettingsPath);
             var settings = JsonSerializer.Deserialize<PrinterSettings>(json, _jsonOptions)
@@ -42,7 +48,7 @@ public sealed class SettingsService
         }
         catch
         {
-            return Normalize(new PrinterSettings());
+            return Normalize(new PrinterSettings { SettingsVersion = CurrentSettingsVersion });
         }
     }
 
@@ -50,7 +56,7 @@ public sealed class SettingsService
     {
         settings.SettingsVersion = CurrentSettingsVersion;
         Normalize(settings);
-        Directory.CreateDirectory(SettingsDirectory);
+        Directory.CreateDirectory(_settingsDirectory);
         var json = JsonSerializer.Serialize(settings, _jsonOptions);
         File.WriteAllText(SettingsPath, json);
     }
