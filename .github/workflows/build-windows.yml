@@ -13,7 +13,7 @@ permissions:
 jobs:
   build-windows:
     runs-on: windows-2022
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -111,6 +111,24 @@ jobs:
             throw 'Smoke-test lỗi không ghi nhật ký khởi động.'
           }
 
+      - name: Probe real packaged startup
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path .\publish\win-x64\RetailPrint.exe
+          $log = Join-Path $env:LOCALAPPDATA 'RetailPrint\Logs\startup.log'
+          Remove-Item $log -ErrorAction SilentlyContinue
+          $process = Start-Process -FilePath $exe -ArgumentList '--startup-probe' -PassThru
+          if (-not $process.WaitForExit(20000)) {
+            $process.Kill($true)
+            throw 'RetailPrint.exe bị treo trên đường khởi động thật.'
+          }
+          if ($process.ExitCode -ne 0) {
+            if (Test-Path $log) {
+              Get-Content $log -Tail 160
+            }
+            throw "RetailPrint.exe lỗi trên đường khởi động thật. Mã $($process.ExitCode)"
+          }
+
       - name: Build per-user installer
         shell: pwsh
         run: |
@@ -122,6 +140,64 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path .\publish\installer\RetailPrint-Setup-win-x64.exe)) {
             throw 'Không tạo được RetailPrint-Setup-win-x64.exe.'
+          }
+
+      - name: Install, open and uninstall built installer
+        shell: pwsh
+        run: |
+          $installer = Resolve-Path .\publish\installer\RetailPrint-Setup-win-x64.exe
+          $installDir = Join-Path $env:LOCALAPPDATA 'RetailPrint-CI-Installed'
+          Remove-Item $installDir -Recurse -Force -ErrorAction SilentlyContinue
+
+          $install = Start-Process -FilePath $installer -ArgumentList @(
+            '/VERYSILENT',
+            '/SUPPRESSMSGBOXES',
+            '/NORESTART',
+            '/SP-',
+            "/DIR=$installDir"
+          ) -PassThru
+          if (-not $install.WaitForExit(30000)) {
+            $install.Kill($true)
+            throw 'Bộ cài Retail Print bị treo khi cài đặt.'
+          }
+          if ($install.ExitCode -ne 0) {
+            throw "Bộ cài Retail Print trả mã lỗi $($install.ExitCode)."
+          }
+
+          $installedExe = Join-Path $installDir 'RetailPrint.exe'
+          if (-not (Test-Path $installedExe)) {
+            throw 'Bộ cài chạy xong nhưng không có RetailPrint.exe trong thư mục cài.'
+          }
+
+          $log = Join-Path $env:LOCALAPPDATA 'RetailPrint\Logs\startup.log'
+          Remove-Item $log -ErrorAction SilentlyContinue
+          $app = Start-Process -FilePath $installedExe -ArgumentList '--startup-probe' -PassThru
+          if (-not $app.WaitForExit(20000)) {
+            $app.Kill($true)
+            throw 'Retail Print bản đã cài bị treo khi mở.'
+          }
+          if ($app.ExitCode -ne 0) {
+            if (Test-Path $log) {
+              Get-Content $log -Tail 160
+            }
+            throw "Retail Print bản đã cài không mở được. Mã $($app.ExitCode)"
+          }
+
+          $uninstaller = Join-Path $installDir 'unins000.exe'
+          if (-not (Test-Path $uninstaller)) {
+            throw 'Không tìm thấy chương trình gỡ cài đặt.'
+          }
+          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @(
+            '/VERYSILENT',
+            '/SUPPRESSMSGBOXES',
+            '/NORESTART'
+          ) -PassThru
+          if (-not $uninstall.WaitForExit(30000)) {
+            $uninstall.Kill($true)
+            throw 'Bộ gỡ Retail Print bị treo.'
+          }
+          if ($uninstall.ExitCode -ne 0) {
+            throw "Bộ gỡ Retail Print trả mã lỗi $($uninstall.ExitCode)."
           }
 
       - name: Upload Retail Print package
