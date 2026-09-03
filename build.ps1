@@ -13,6 +13,8 @@ if ($LASTEXITCODE -ne 0) {
     throw "dotnet restore thất bại với mã $LASTEXITCODE"
 }
 
+Remove-Item $output -Recurse -Force -ErrorAction SilentlyContinue
+
 dotnet publish $project -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:DebugType=None -o $output
 if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish thất bại với mã $LASTEXITCODE"
@@ -21,6 +23,12 @@ if ($LASTEXITCODE -ne 0) {
 $exe = Join-Path $output 'RetailPrint.exe'
 if (-not (Test-Path $exe)) {
     throw 'Không tạo được RetailPrint.exe.'
+}
+
+$looseDlls = Get-ChildItem $output -File -Filter '*.dll'
+if ($looseDlls) {
+    $looseDlls | Select-Object Name, Length | Format-Table -AutoSize
+    throw 'Gói single-file còn DLL rời; bộ cài sẽ thiếu thư viện native nếu chỉ đóng gói RetailPrint.exe.'
 }
 
 Write-Host 'Đang kiểm tra khả năng khởi động...'

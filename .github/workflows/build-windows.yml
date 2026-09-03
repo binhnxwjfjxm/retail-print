@@ -62,6 +62,7 @@ jobs:
       - name: Publish Windows x64
         shell: pwsh
         run: |
+          Remove-Item .\publish\win-x64 -Recurse -Force -ErrorAction SilentlyContinue
           dotnet publish .\RetailPrint\RetailPrint.csproj `
             -c Release `
             -r win-x64 `
@@ -72,6 +73,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path .\publish\win-x64\RetailPrint.exe)) {
             throw 'Không tạo được RetailPrint.exe.'
+          }
+          $looseDlls = Get-ChildItem .\publish\win-x64 -File -Filter '*.dll'
+          if ($looseDlls) {
+            $looseDlls | Select-Object Name, Length | Format-Table -AutoSize
+            throw 'Gói single-file còn DLL rời; installer không được phép đóng gói thiếu thư viện native.'
           }
 
       - name: Smoke test packaged app
