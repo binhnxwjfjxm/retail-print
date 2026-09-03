@@ -18,10 +18,35 @@ public partial class App : System.Windows.Application
     private PrinterClient? _printerClient;
     private RetailApiClient? _retailApiClient;
     private RetailAgentService? _agentService;
+    private bool _exceptionHandlersConfigured;
 
     public MainWindow? MainWindowInstance { get; private set; }
 
     protected override void OnStartup(StartupEventArgs e)
+    {
+        ConfigureExceptionHandling();
+
+        try
+        {
+            if (HasArgument(e.Args, "--smoke-test"))
+            {
+                base.OnStartup(e);
+                RunSmokeTest();
+                Shutdown(0);
+                return;
+            }
+
+            StartApplication(e);
+        }
+        catch (Exception error)
+        {
+            CrashLogService.Write(error, "Khởi động ứng dụng");
+            ShowStartupFailure();
+            Shutdown(-1);
+        }
+    }
+
+    private void StartApplication(StartupEventArgs e)
     {
         _singleInstanceMutex = new Mutex(
             initiallyOwned: true,
@@ -91,16 +116,88 @@ public partial class App : System.Windows.Application
 
         _agentService.Start();
 
-        var startInBackground = e.Args.Any(arg =>
-            string.Equals(
-                arg,
-                "--background",
-                StringComparison.OrdinalIgnoreCase));
-
+        var startInBackground = HasArgument(e.Args, "--background");
         if (!startInBackground)
         {
             MainWindowInstance.Show();
             MainWindowInstance.Activate();
+        }
+    }
+
+    private static bool HasArgument(IEnumerable<string> args, string expected) => args.Any(
+        arg => string.Equals(arg, expected, StringComparison.OrdinalIgnoreCase));
+
+    private static void RunSmokeTest()
+    {
+        var settingsService = new SettingsService();
+        var startupService = new StartupService();
+        var printerClient = new PrinterClient();
+        using var retailApiClient = new RetailApiClient();
+        using var agentService = new RetailAgentService(
+            settingsService,
+            new DeviceIdentityService(),
+            retailApiClient,
+            printerClient,
+            new PrintJobJournal());
+
+        var window = new MainWindow(
+            settingsService,
+            startupService,
+            printerClient,
+            agentService)
+        {
+            AllowClose = true
+        };
+        window.Close();
+    }
+
+    private void ConfigureExceptionHandling()
+    {
+        if (_exceptionHandlersConfigured) return;
+        _exceptionHandlersConfigured = true;
+
+        DispatcherUnhandledException += (_, args) =>
+        {
+            CrashLogService.Write(args.Exception, "Lỗi giao diện chưa được xử lý");
+            args.Handled = true;
+            try
+            {
+                MessageBox.Show(
+                    $"Retail Print gặp lỗi và cần đóng. Nhật ký lỗi được lưu tại:\n{CrashLogService.StartupLogPath}",
+                    "Retail Print",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            catch { }
+            Shutdown(-1);
+        };
+
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            if (args.ExceptionObject is Exception error)
+                CrashLogService.Write(error, "Lỗi tiến trình chưa được xử lý");
+        };
+
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            CrashLogService.Write(args.Exception, "Lỗi tác vụ nền chưa được quan sát");
+            args.SetObserved();
+        };
+    }
+
+    private static void ShowStartupFailure()
+    {
+        try
+        {
+            MessageBox.Show(
+                $"Retail Print không thể khởi động. Nhật ký lỗi được lưu tại:\n{CrashLogService.StartupLogPath}",
+                "Retail Print",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        catch
+        {
+            // Không để lỗi hiển thị che mất lỗi khởi động ban đầu.
         }
     }
 
@@ -126,7 +223,7 @@ public partial class App : System.Windows.Application
             await _printerClient.PrintTestAsync(settings);
             _trayService?.ShowStatus(
                 "Retail Print",
-                "Máy in phản hồi tốt. Phiếu in thử đã được gửi.");
+                "Phiếu in thử đã được gửi tới máy in đã thiết lập.");
         }
         catch (Exception error)
         {

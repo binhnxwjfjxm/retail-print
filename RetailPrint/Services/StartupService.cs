@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using Microsoft.Win32;
 
 namespace RetailPrint.Services;
@@ -10,8 +10,15 @@ public sealed class StartupService
 
     public bool IsEnabled()
     {
-        using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: false);
-        return key?.GetValue(ValueName) is string value && !string.IsNullOrWhiteSpace(value);
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: false);
+            return key?.GetValue(ValueName) is string value && !string.IsNullOrWhiteSpace(value);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public void Apply(bool enabled)

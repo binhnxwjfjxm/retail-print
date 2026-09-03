@@ -12,6 +12,7 @@ public partial class MainWindow : Window
     private readonly StartupService _startupService;
     private readonly PrinterClient _printerClient;
     private readonly RetailAgentService _agentService;
+    private bool _loadingSettings;
 
     public bool AllowClose { get; set; }
     public event Action<bool>? StartupPreferenceChanged;
@@ -38,26 +39,51 @@ public partial class MainWindow : Window
 
     private void LoadSettings()
     {
-        var settings = _settingsService.Load();
-        PrinterNameTextBox.Text = settings.PrinterName;
-        IpTextBox.Text = settings.IpAddress;
-        PortTextBox.Text = settings.Port.ToString();
-        Paper80Radio.IsChecked = settings.PaperWidthMm == 80;
-        Paper58Radio.IsChecked = settings.PaperWidthMm == 58;
-        StartupCheckBox.IsChecked = _startupService.IsEnabled() || settings.StartWithWindows;
+        _loadingSettings = true;
+        try
+        {
+            var settings = _settingsService.Load();
+            IpTextBox.Text = settings.IpAddress;
+            PortTextBox.Text = settings.Port.ToString();
+            Paper80Radio.IsChecked = settings.PaperWidthMm == 80;
+            Paper58Radio.IsChecked = settings.PaperWidthMm == 58;
+            StartupCheckBox.IsChecked = _startupService.IsEnabled() || settings.StartWithWindows;
+
+            WindowsPrinterRadio.IsChecked = settings.UsesWindowsPrinter;
+            NetworkPrinterRadio.IsChecked = !settings.UsesWindowsPrinter;
+            RefreshWindowsPrinters(settings.WindowsPrinterName, quiet: true);
+            UpdateConnectionPanels();
+        }
+        finally
+        {
+            _loadingSettings = false;
+        }
     }
 
     private PrinterSettings ReadSettingsFromForm()
     {
-        if (!int.TryParse(PortTextBox.Text.Trim(), out var port))
+        var useWindowsPrinter = WindowsPrinterRadio.IsChecked == true;
+        var port = 9100;
+        if (!useWindowsPrinter && !int.TryParse(PortTextBox.Text.Trim(), out port))
             throw new InvalidOperationException("Cổng máy in chưa đúng.");
+        if (useWindowsPrinter && int.TryParse(PortTextBox.Text.Trim(), out var savedPort))
+            port = savedPort;
 
+        var windowsPrinterName = WindowsPrinterComboBox.SelectedItem as string ?? "";
+        var ipAddress = IpTextBox.Text.Trim();
         var settings = new PrinterSettings
         {
-            PrinterName = string.IsNullOrWhiteSpace(PrinterNameTextBox.Text)
-                ? "Máy in quầy"
-                : PrinterNameTextBox.Text.Trim(),
-            IpAddress = IpTextBox.Text.Trim(),
+            SettingsVersion = 2,
+            ConnectionMode = useWindowsPrinter
+                ? PrinterConnectionModes.Windows
+                : PrinterConnectionModes.Network,
+            WindowsPrinterName = windowsPrinterName,
+            PrinterName = useWindowsPrinter
+                ? windowsPrinterName
+                : string.IsNullOrWhiteSpace(ipAddress)
+                    ? "Máy in mạng"
+                    : $"Máy in mạng {ipAddress}",
+            IpAddress = ipAddress,
             Port = port,
             PaperWidthMm = Paper58Radio.IsChecked == true ? 58 : 80,
             StartWithWindows = StartupCheckBox.IsChecked == true
@@ -75,15 +101,76 @@ public partial class MainWindow : Window
         StartupPreferenceChanged?.Invoke(settings.StartWithWindows);
     }
 
+    private void RefreshWindowsPrinters(string? preferred = null, bool quiet = false)
+    {
+        try
+        {
+            var printers = _printerClient.ListWindowsPrinters();
+            WindowsPrinterComboBox.ItemsSource = printers;
+
+            var desired = FindPrinter(printers, preferred)
+                          ?? FindPrinter(printers, _printerClient.GetDefaultWindowsPrinterName())
+                          ?? printers.FirstOrDefault();
+            WindowsPrinterComboBox.SelectedItem = desired;
+
+            if (!quiet)
+            {
+                PrinterStatusText.Text = printers.Count == 0
+                    ? "Windows chưa có máy in nào. Hãy cài máy in trong Windows rồi bấm Làm mới."
+                    : $"Đã tìm thấy {printers.Count} máy in trên Windows.";
+            }
+        }
+        catch (Exception error)
+        {
+            WindowsPrinterComboBox.ItemsSource = Array.Empty<string>();
+            WindowsPrinterComboBox.SelectedItem = null;
+            if (!quiet)
+                PrinterStatusText.Text = $"Chưa thể đọc danh sách máy in Windows: {error.Message}";
+        }
+    }
+
+    private static string? FindPrinter(IReadOnlyList<string> printers, string? desired)
+    {
+        if (string.IsNullOrWhiteSpace(desired)) return null;
+        return printers.FirstOrDefault(name =>
+            string.Equals(name, desired.Trim(), StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void UpdateConnectionPanels()
+    {
+        if (WindowsPrinterPanel is null || NetworkPrinterPanel is null) return;
+        var useWindowsPrinter = WindowsPrinterRadio.IsChecked == true;
+        WindowsPrinterPanel.Visibility = useWindowsPrinter ? Visibility.Visible : Visibility.Collapsed;
+        NetworkPrinterPanel.Visibility = useWindowsPrinter ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void ConnectionMode_Checked(object sender, RoutedEventArgs e)
+    {
+        UpdateConnectionPanels();
+        if (_loadingSettings) return;
+
+        if (WindowsPrinterRadio.IsChecked == true && WindowsPrinterComboBox.Items.Count == 0)
+            RefreshWindowsPrinters();
+        else
+            PrinterStatusText.Text = WindowsPrinterRadio.IsChecked == true
+                ? "Chọn máy in Windows rồi bấm In thử."
+                : "Nhập địa chỉ máy in mạng rồi bấm In thử.";
+    }
+
+    private void RefreshPrintersButton_Click(object sender, RoutedEventArgs e)
+    {
+        RefreshWindowsPrinters(WindowsPrinterComboBox.SelectedItem as string);
+    }
+
     private async void TestButton_Click(object sender, RoutedEventArgs e)
     {
         try
         {
             TestButton.IsEnabled = false;
-            PrinterStatusText.Text = "Đang kiểm tra máy in…";
+            PrinterStatusText.Text = "Đang gửi phiếu in thử…";
             var settings = ReadSettingsFromForm();
             await _printerClient.PrintTestAsync(settings);
-            PrinterStatusText.Text = "Máy in phản hồi tốt. Phiếu in thử đã được gửi.";
+            PrinterStatusText.Text = "Phiếu in thử đã được gửi tới máy in đã chọn.";
         }
         catch (Exception error)
         {
@@ -100,7 +187,7 @@ public partial class MainWindow : Window
         try
         {
             SaveCurrentSettings();
-            PrinterStatusText.Text = "Đã lưu cấu hình.";
+            PrinterStatusText.Text = "Đã lưu máy in cho Retail Print.";
         }
         catch (Exception error)
         {
@@ -145,24 +232,16 @@ public partial class MainWindow : Window
             switch (connected)
             {
                 case true:
-                    RetailStatusBadge.Background = new SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(236, 253, 245));
-                    RetailStatusText.Foreground = new SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(4, 120, 87));
+                    RetailStatusBadge.Background = new SolidColorBrush(Color.FromRgb(236, 253, 245));
+                    RetailStatusText.Foreground = new SolidColorBrush(Color.FromRgb(4, 120, 87));
                     break;
-
                 case false:
-                    RetailStatusBadge.Background = new SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(254, 242, 242));
-                    RetailStatusText.Foreground = new SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(185, 28, 28));
+                    RetailStatusBadge.Background = new SolidColorBrush(Color.FromRgb(254, 242, 242));
+                    RetailStatusText.Foreground = new SolidColorBrush(Color.FromRgb(185, 28, 28));
                     break;
-
                 default:
-                    RetailStatusBadge.Background = new SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(238, 242, 247));
-                    RetailStatusText.Foreground = new SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(75, 85, 99));
+                    RetailStatusBadge.Background = new SolidColorBrush(Color.FromRgb(238, 242, 247));
+                    RetailStatusText.Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99));
                     break;
             }
         });

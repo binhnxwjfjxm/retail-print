@@ -12,8 +12,8 @@ permissions:
 
 jobs:
   build-windows:
-    runs-on: windows-latest
-    timeout-minutes: 15
+    runs-on: windows-2022
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -74,10 +74,38 @@ jobs:
             throw 'Không tạo được RetailPrint.exe.'
           }
 
-      - name: Upload Retail Print
+      - name: Smoke test packaged app
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path .\publish\win-x64\RetailPrint.exe
+          $process = Start-Process -FilePath $exe -ArgumentList '--smoke-test' -PassThru -Wait
+          if ($process.ExitCode -ne 0) {
+            $log = Join-Path $env:LOCALAPPDATA 'RetailPrint\Logs\startup.log'
+            if (Test-Path $log) {
+              Get-Content $log -Tail 160
+            }
+            throw "RetailPrint.exe không khởi động được. Mã $($process.ExitCode)"
+          }
+
+      - name: Build per-user installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            throw 'Windows runner không có Inno Setup 6.'
+          }
+          & $iscc "/DMyAppVersion=2.0.$env:GITHUB_RUN_NUMBER" .\installer\RetailPrint.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path .\publish\installer\RetailPrint-Setup-win-x64.exe)) {
+            throw 'Không tạo được RetailPrint-Setup-win-x64.exe.'
+          }
+
+      - name: Upload Retail Print package
         uses: actions/upload-artifact@v4
         with:
           name: RetailPrint-win-x64
-          path: publish/win-x64/RetailPrint.exe
+          path: |
+            publish/win-x64/RetailPrint.exe
+            publish/installer/RetailPrint-Setup-win-x64.exe
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30

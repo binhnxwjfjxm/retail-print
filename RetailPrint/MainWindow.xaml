@@ -3,13 +3,13 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Retail Print"
         Icon="Assets/RetailPrint.ico"
-        Width="390"
-        Height="520"
-        MinWidth="390"
-        MaxWidth="390"
-        MinHeight="520"
-        MaxHeight="520"
-        ResizeMode="NoResize"
+        Width="430"
+        Height="680"
+        MinWidth="430"
+        MaxWidth="430"
+        MinHeight="620"
+        MaxHeight="760"
+        ResizeMode="CanMinimize"
         WindowStartupLocation="CenterScreen"
         ShowInTaskbar="False"
         Background="#F5F6F8"
@@ -55,106 +55,108 @@
     </Window.Resources>
 
     <Border Margin="12" Padding="16" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="10">
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="14" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="12" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="12" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="12" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="14" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="14" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="10" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-
-            <Grid Grid.Row="0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel>
-                    <TextBlock Text="Retail Print" FontSize="19" FontWeight="SemiBold" Foreground="#111827" />
-                    <TextBlock Text="Máy in tại quầy" Margin="0,2,0,0" FontSize="12" Foreground="#6B7280" />
-                </StackPanel>
-                <Border x:Name="RetailStatusBadge" Grid.Column="1" Padding="9,5" CornerRadius="12" Background="#EEF2F7" VerticalAlignment="Center">
-                    <TextBlock x:Name="RetailStatusText" Text="Đang kết nối…" FontSize="11" FontWeight="SemiBold" Foreground="#4B5563" />
-                </Border>
-            </Grid>
-
-            <StackPanel Grid.Row="2">
-                <TextBlock Text="Tên máy in" Style="{StaticResource LabelStyle}" />
-                <TextBox x:Name="PrinterNameTextBox" Style="{StaticResource InputStyle}" />
-            </StackPanel>
-
-            <Grid Grid.Row="4">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="10" />
-                    <ColumnDefinition Width="95" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0">
-                    <TextBlock Text="IP máy in" Style="{StaticResource LabelStyle}" />
-                    <TextBox x:Name="IpTextBox" Style="{StaticResource InputStyle}" />
-                </StackPanel>
-                <StackPanel Grid.Column="2">
-                    <TextBlock Text="Cổng" Style="{StaticResource LabelStyle}" />
-                    <TextBox x:Name="PortTextBox" Style="{StaticResource InputStyle}" />
-                </StackPanel>
-            </Grid>
-
-            <Grid Grid.Row="6">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="12" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0">
-                    <TextBlock Text="Khổ giấy" Style="{StaticResource LabelStyle}" />
-                    <Border Height="38" Background="#F8FAFC" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="7" Padding="10,0">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <RadioButton x:Name="Paper80Radio" Content="80 mm" GroupName="Paper" Margin="0,0,24,0" />
-                            <RadioButton x:Name="Paper58Radio" Content="58 mm" GroupName="Paper" />
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-                <CheckBox x:Name="StartupCheckBox" Grid.Column="2" Content="Mở cùng Windows" VerticalAlignment="Bottom" Margin="0,0,0,9" Foreground="#374151" />
-            </Grid>
-
-            <Border Grid.Row="8" Padding="11" CornerRadius="8" Background="#F8FAFC" BorderBrush="#E5E7EB" BorderThickness="1">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
                 <Grid>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="8" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0">
-                        <TextBlock Text="Kết nối Retail" FontWeight="SemiBold" Foreground="#111827" />
-                        <TextBlock Text="Nhập mã này trong Thiết lập máy in trên Retail." Margin="0,2,0,0" FontSize="11" Foreground="#6B7280" />
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Retail Print" FontSize="19" FontWeight="SemiBold" Foreground="#111827" />
+                        <TextBlock Text="Máy in tại quầy" Margin="0,2,0,0" FontSize="12" Foreground="#6B7280" />
                     </StackPanel>
-                    <Button x:Name="PairButton" Grid.Column="1" Content="Lấy mã" MinWidth="82" Height="32" Style="{StaticResource SecondaryButton}" Click="PairButton_Click" />
-                    <Grid Grid.Row="2" Grid.ColumnSpan="2">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="12" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                        <TextBlock x:Name="PairingCodeText" Text="Chưa có mã" FontSize="19" FontWeight="SemiBold" Foreground="#111827" VerticalAlignment="Center" />
-                        <TextBlock x:Name="PairingHintText" Grid.Column="2" Text="Mã dùng một lần, hiệu lực 10 phút." FontSize="11" Foreground="#6B7280" TextWrapping="Wrap" VerticalAlignment="Center" />
-                    </Grid>
+                    <Border x:Name="RetailStatusBadge" Grid.Column="1" Padding="9,5" CornerRadius="12" Background="#EEF2F7" VerticalAlignment="Center">
+                        <TextBlock x:Name="RetailStatusText" Text="Đang kết nối…" FontSize="11" FontWeight="SemiBold" Foreground="#4B5563" />
+                    </Border>
                 </Grid>
-            </Border>
 
-            <Grid Grid.Row="10">
-                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="10" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                <Button x:Name="TestButton" Grid.Column="0" Content="In thử" Style="{StaticResource SecondaryButton}" Click="TestButton_Click" />
-                <Button x:Name="SaveButton" Grid.Column="2" Content="Lưu" Style="{StaticResource PrimaryButton}" Click="SaveButton_Click" />
-            </Grid>
+                <TextBlock Text="Cách kết nối máy in" Style="{StaticResource LabelStyle}" Margin="0,18,0,5" />
+                <Border Padding="10" Background="#F8FAFC" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="7">
+                    <StackPanel>
+                        <RadioButton x:Name="WindowsPrinterRadio" Content="Máy in trên Windows" GroupName="ConnectionMode" FontWeight="SemiBold" Checked="ConnectionMode_Checked" />
+                        <TextBlock Text="Dùng máy in đã được cài trong Printers &amp; scanners của Windows." Margin="22,3,0,10" FontSize="11" Foreground="#6B7280" TextWrapping="Wrap" />
+                        <RadioButton x:Name="NetworkPrinterRadio" Content="Máy in mạng trực tiếp" GroupName="ConnectionMode" FontWeight="SemiBold" Checked="ConnectionMode_Checked" />
+                        <TextBlock Text="Dùng cho máy in có địa chỉ mạng riêng, không cần cắm USB vào máy tính." Margin="22,3,0,0" FontSize="11" Foreground="#6B7280" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
 
-            <Border Grid.Row="12" Padding="10,8" CornerRadius="7" Background="#F8FAFC">
-                <TextBlock x:Name="PrinterStatusText" Text="Đóng cửa sổ sẽ thu nhỏ xuống khay hệ thống và vẫn nhận lệnh in." FontSize="11" Foreground="#6B7280" TextWrapping="Wrap" />
-            </Border>
+                <StackPanel x:Name="WindowsPrinterPanel" Margin="0,14,0,0">
+                    <TextBlock Text="Máy in Windows" Style="{StaticResource LabelStyle}" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ComboBox x:Name="WindowsPrinterComboBox" Height="34" Padding="7,3" VerticalContentAlignment="Center" />
+                        <Button x:Name="RefreshPrintersButton" Grid.Column="2" Content="Làm mới" MinWidth="82" Height="34" Style="{StaticResource SecondaryButton}" Click="RefreshPrintersButton_Click" />
+                    </Grid>
+                </StackPanel>
 
-            <TextBlock Grid.Row="14" Text="Cấu hình chỉ lưu trên máy Windows này." FontSize="10.5" Foreground="#9CA3AF" HorizontalAlignment="Center" />
-        </Grid>
+                <Grid x:Name="NetworkPrinterPanel" Margin="0,14,0,0" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="10" />
+                        <ColumnDefinition Width="95" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="Địa chỉ máy in" Style="{StaticResource LabelStyle}" />
+                        <TextBox x:Name="IpTextBox" Style="{StaticResource InputStyle}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Cổng" Style="{StaticResource LabelStyle}" />
+                        <TextBox x:Name="PortTextBox" Style="{StaticResource InputStyle}" />
+                    </StackPanel>
+                </Grid>
+
+                <Grid Margin="0,14,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="Khổ giấy" Style="{StaticResource LabelStyle}" />
+                        <Border Height="38" Background="#F8FAFC" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="7" Padding="10,0">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <RadioButton x:Name="Paper80Radio" Content="80 mm" GroupName="Paper" Margin="0,0,24,0" />
+                                <RadioButton x:Name="Paper58Radio" Content="58 mm" GroupName="Paper" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                    <CheckBox x:Name="StartupCheckBox" Grid.Column="2" Content="Mở cùng Windows" VerticalAlignment="Bottom" Margin="0,0,0,9" Foreground="#374151" />
+                </Grid>
+
+                <Border Margin="0,16,0,0" Padding="11" CornerRadius="8" Background="#F8FAFC" BorderBrush="#E5E7EB" BorderThickness="1">
+                    <Grid>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="8" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Kết nối Retail" FontWeight="SemiBold" Foreground="#111827" />
+                            <TextBlock Text="Nhập mã này trong Thiết lập máy in trên Retail." Margin="0,2,0,0" FontSize="11" Foreground="#6B7280" />
+                        </StackPanel>
+                        <Button x:Name="PairButton" Grid.Column="1" Content="Lấy mã" MinWidth="82" Height="32" Style="{StaticResource SecondaryButton}" Click="PairButton_Click" />
+                        <Grid Grid.Row="2" Grid.ColumnSpan="2">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="12" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <TextBlock x:Name="PairingCodeText" Text="Chưa có mã" FontSize="19" FontWeight="SemiBold" Foreground="#111827" VerticalAlignment="Center" />
+                            <TextBlock x:Name="PairingHintText" Grid.Column="2" Text="Mã dùng một lần, hiệu lực 10 phút." FontSize="11" Foreground="#6B7280" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <Grid Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="10" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <Button x:Name="TestButton" Grid.Column="0" Content="In thử" Style="{StaticResource SecondaryButton}" Click="TestButton_Click" />
+                    <Button x:Name="SaveButton" Grid.Column="2" Content="Lưu" Style="{StaticResource PrimaryButton}" Click="SaveButton_Click" />
+                </Grid>
+
+                <Border Margin="0,14,0,0" Padding="10,8" CornerRadius="7" Background="#F8FAFC">
+                    <TextBlock x:Name="PrinterStatusText" Text="Chọn máy in, in thử rồi lưu. Đóng cửa sổ sẽ thu nhỏ xuống khay hệ thống." FontSize="11" Foreground="#6B7280" TextWrapping="Wrap" />
+                </Border>
+
+                <TextBlock Text="Cấu hình máy in chỉ lưu trên máy Windows này." Margin="0,10,0,0" FontSize="10.5" Foreground="#9CA3AF" HorizontalAlignment="Center" />
+            </StackPanel>
+        </ScrollViewer>
     </Border>
 </Window>
