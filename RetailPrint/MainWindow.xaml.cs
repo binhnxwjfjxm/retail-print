@@ -13,6 +13,7 @@ public partial class MainWindow : Window
     private readonly PrinterClient _printerClient;
     private readonly RetailAgentService _agentService;
     private bool _loadingSettings;
+    private string? _preferredWindowsPrinterName;
 
     public bool AllowClose { get; set; }
 
@@ -33,6 +34,7 @@ public partial class MainWindow : Window
         _agentService.PairingChanged += SetPairing;
 
         LoadSettings();
+        Loaded += MainWindow_Loaded;
         Closing += MainWindow_Closing;
     }
 
@@ -50,13 +52,23 @@ public partial class MainWindow : Window
 
             WindowsPrinterRadio.IsChecked = settings.UsesWindowsPrinter;
             NetworkPrinterRadio.IsChecked = !settings.UsesWindowsPrinter;
-            RefreshWindowsPrinters(settings.WindowsPrinterName, quiet: true);
+            _preferredWindowsPrinterName = settings.WindowsPrinterName;
             UpdateConnectionPanels();
+            PrinterStatusText.Text = settings.UsesWindowsPrinter
+                ? "Đang tải danh sách máy in Windows…"
+                : "Nhập địa chỉ máy in mạng rồi bấm In thử.";
         }
         finally
         {
             _loadingSettings = false;
         }
+    }
+
+    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= MainWindow_Loaded;
+        if (WindowsPrinterRadio.IsChecked == true)
+            await RefreshWindowsPrintersAsync(_preferredWindowsPrinterName, quiet: true);
     }
 
     private PrinterSettings ReadSettingsFromForm()
@@ -99,31 +111,58 @@ public partial class MainWindow : Window
         _startupService.Apply(settings.StartWithWindows);
     }
 
-    private void RefreshWindowsPrinters(string? preferred = null, bool quiet = false)
+    private async Task RefreshWindowsPrintersAsync(string? preferred = null, bool quiet = false)
     {
         try
         {
-            var printers = _printerClient.ListWindowsPrinters();
+            if (!quiet)
+                PrinterStatusText.Text = "Đang tải danh sách máy in Windows…";
+
+            var discoveryTask = Task.Run(() =>
+            {
+                var printers = _printerClient.ListWindowsPrinters();
+                var defaultPrinter = _printerClient.GetDefaultWindowsPrinterName();
+                return (Printers: printers, DefaultPrinter: defaultPrinter);
+            });
+
+            var completed = await Task.WhenAny(
+                discoveryTask,
+                Task.Delay(TimeSpan.FromSeconds(5)));
+
+            if (completed != discoveryTask)
+            {
+                _ = discoveryTask.ContinueWith(
+                    task =>
+                    {
+                        if (task.Exception is not null)
+                            CrashLogService.Write(task.Exception, "Đọc danh sách máy in Windows");
+                    },
+                    TaskContinuationOptions.OnlyOnFaulted);
+
+                PrinterStatusText.Text =
+                    "Windows đang phản hồi chậm khi đọc máy in. Retail Print vẫn hoạt động; bấm Làm mới để thử lại.";
+                return;
+            }
+
+            var result = await discoveryTask;
+            var printers = result.Printers;
             WindowsPrinterComboBox.ItemsSource = printers;
 
             var desired = FindPrinter(printers, preferred)
-                          ?? FindPrinter(printers, _printerClient.GetDefaultWindowsPrinterName())
+                          ?? FindPrinter(printers, result.DefaultPrinter)
                           ?? printers.FirstOrDefault();
             WindowsPrinterComboBox.SelectedItem = desired;
 
-            if (!quiet)
-            {
-                PrinterStatusText.Text = printers.Count == 0
-                    ? "Windows chưa có máy in nào. Hãy cài máy in trong Windows rồi bấm Làm mới."
-                    : $"Đã tìm thấy {printers.Count} máy in trên Windows.";
-            }
+            PrinterStatusText.Text = printers.Count == 0
+                ? "Windows chưa có máy in nào. Hãy cài máy in trong Windows rồi bấm Làm mới."
+                : $"Đã tìm thấy {printers.Count} máy in trên Windows.";
         }
         catch (Exception error)
         {
             WindowsPrinterComboBox.ItemsSource = Array.Empty<string>();
             WindowsPrinterComboBox.SelectedItem = null;
-            if (!quiet)
-                PrinterStatusText.Text = $"Chưa thể đọc danh sách máy in Windows: {error.Message}";
+            PrinterStatusText.Text = $"Chưa thể đọc danh sách máy in Windows: {error.Message}";
+            CrashLogService.Write(error, "Đọc danh sách máy in Windows");
         }
     }
 
@@ -142,22 +181,22 @@ public partial class MainWindow : Window
         NetworkPrinterPanel.Visibility = useWindowsPrinter ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    private void ConnectionMode_Checked(object sender, RoutedEventArgs e)
+    private async void ConnectionMode_Checked(object sender, RoutedEventArgs e)
     {
         UpdateConnectionPanels();
         if (_loadingSettings) return;
 
         if (WindowsPrinterRadio.IsChecked == true && WindowsPrinterComboBox.Items.Count == 0)
-            RefreshWindowsPrinters();
+            await RefreshWindowsPrintersAsync();
         else
             PrinterStatusText.Text = WindowsPrinterRadio.IsChecked == true
                 ? "Chọn máy in Windows rồi bấm In thử."
                 : "Nhập địa chỉ máy in mạng rồi bấm In thử.";
     }
 
-    private void RefreshPrintersButton_Click(object sender, RoutedEventArgs e)
+    private async void RefreshPrintersButton_Click(object sender, RoutedEventArgs e)
     {
-        RefreshWindowsPrinters(WindowsPrinterComboBox.SelectedItem as string);
+        await RefreshWindowsPrintersAsync(WindowsPrinterComboBox.SelectedItem as string);
     }
 
     private async void TestButton_Click(object sender, RoutedEventArgs e)
