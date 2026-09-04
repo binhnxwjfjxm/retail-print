@@ -296,7 +296,7 @@ public partial class App : System.Windows.Application
         MainWindowInstance.Activate();
     }
 
-    private void ExitApplication()
+    public void ExitApplication()
     {
         _agentService?.Dispose();
         _agentService = null;
