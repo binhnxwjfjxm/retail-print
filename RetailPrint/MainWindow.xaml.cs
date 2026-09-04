@@ -14,6 +14,7 @@ public partial class MainWindow : Window
     private readonly RetailAgentService _agentService;
     private bool _loadingSettings;
     private string? _preferredWindowsPrinterName;
+    private int _printerDiscoveryVersion;
 
     public bool AllowClose { get; set; }
 
@@ -113,6 +114,7 @@ public partial class MainWindow : Window
 
     private async Task RefreshWindowsPrintersAsync(string? preferred = null, bool quiet = false)
     {
+        var discoveryVersion = ++_printerDiscoveryVersion;
         try
         {
             if (!quiet)
@@ -129,22 +131,18 @@ public partial class MainWindow : Window
                 discoveryTask,
                 Task.Delay(TimeSpan.FromSeconds(5)));
 
-            if (completed != discoveryTask)
+            if (completed != discoveryTask
+                && discoveryVersion == _printerDiscoveryVersion
+                && WindowsPrinterRadio.IsChecked == true)
             {
-                _ = discoveryTask.ContinueWith(
-                    task =>
-                    {
-                        if (task.Exception is not null)
-                            CrashLogService.Write(task.Exception, "Đọc danh sách máy in Windows");
-                    },
-                    TaskContinuationOptions.OnlyOnFaulted);
-
                 PrinterStatusText.Text =
-                    "Windows đang phản hồi chậm khi đọc máy in. Retail Print vẫn hoạt động; bấm Làm mới để thử lại.";
-                return;
+                    "Windows đang phản hồi chậm khi đọc máy in. Retail Print vẫn hoạt động và sẽ tự cập nhật khi danh sách sẵn sàng.";
             }
 
             var result = await discoveryTask;
+            if (discoveryVersion != _printerDiscoveryVersion || WindowsPrinterRadio.IsChecked != true)
+                return;
+
             var printers = result.Printers;
             WindowsPrinterComboBox.ItemsSource = printers;
 
@@ -159,6 +157,9 @@ public partial class MainWindow : Window
         }
         catch (Exception error)
         {
+            if (discoveryVersion != _printerDiscoveryVersion)
+                return;
+
             WindowsPrinterComboBox.ItemsSource = Array.Empty<string>();
             WindowsPrinterComboBox.SelectedItem = null;
             PrinterStatusText.Text = $"Chưa thể đọc danh sách máy in Windows: {error.Message}";
@@ -187,11 +188,18 @@ public partial class MainWindow : Window
         if (_loadingSettings) return;
 
         if (WindowsPrinterRadio.IsChecked == true && WindowsPrinterComboBox.Items.Count == 0)
+        {
             await RefreshWindowsPrintersAsync();
+        }
+        else if (WindowsPrinterRadio.IsChecked == true)
+        {
+            PrinterStatusText.Text = "Chọn máy in Windows rồi bấm In thử.";
+        }
         else
-            PrinterStatusText.Text = WindowsPrinterRadio.IsChecked == true
-                ? "Chọn máy in Windows rồi bấm In thử."
-                : "Nhập địa chỉ máy in mạng rồi bấm In thử.";
+        {
+            _printerDiscoveryVersion += 1;
+            PrinterStatusText.Text = "Nhập địa chỉ máy in mạng rồi bấm In thử.";
+        }
     }
 
     private async void RefreshPrintersButton_Click(object sender, RoutedEventArgs e)
