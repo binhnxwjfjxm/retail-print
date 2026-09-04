@@ -131,7 +131,7 @@ jobs:
             throw "RetailPrint.exe lỗi trên đường khởi động thật. Mã $($process.ExitCode)"
           }
 
-      - name: Keep normal packaged app alive
+      - name: Close normal packaged app cleanly
         shell: pwsh
         run: |
           $exe = Resolve-Path .\publish\win-x64\RetailPrint.exe
@@ -147,8 +147,18 @@ jobs:
               Format-List
             throw "RetailPrint.exe tự thoát khi chạy bình thường. Mã $($app.ExitCode)"
           }
-          $app.Kill($true)
-          $app.WaitForExit(10000) | Out-Null
+          if (-not $app.CloseMainWindow()) {
+            $app.Kill($true)
+            throw 'Không gửi được yêu cầu đóng cửa sổ Retail Print.'
+          }
+          if (-not $app.WaitForExit(10000)) {
+            $app.Kill($true)
+            throw 'Đóng cửa sổ nhưng Retail Print vẫn chạy ngầm.'
+          }
+          if ($app.ExitCode -ne 0) {
+            if (Test-Path $log) { Get-Content $log -Tail 160 }
+            throw "Retail Print thoát không sạch khi đóng cửa sổ. Mã $($app.ExitCode)"
+          }
 
       - name: Build per-user installer
         shell: pwsh
@@ -163,7 +173,7 @@ jobs:
             throw 'Không tạo được RetailPrint-Setup-win-x64.exe.'
           }
 
-      - name: Install, open and uninstall built installer
+      - name: Install, run and uninstall while app is open
         shell: pwsh
         run: |
           $installer = Resolve-Path .\publish\installer\RetailPrint-Setup-win-x64.exe
@@ -216,11 +226,9 @@ jobs:
             throw "Retail Print bản đã cài tự thoát khi mở. Mã $($app.ExitCode)"
           }
 
-          $app.Kill($true)
-          $app.WaitForExit(10000) | Out-Null
-
           $uninstaller = Join-Path $installDir 'unins000.exe'
           if (-not (Test-Path $uninstaller)) {
+            $app.Kill($true)
             throw 'Không tìm thấy chương trình gỡ cài đặt.'
           }
           $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @(
@@ -230,10 +238,19 @@ jobs:
           ) -PassThru
           if (-not $uninstall.WaitForExit(30000)) {
             $uninstall.Kill($true)
-            throw 'Bộ gỡ Retail Print bị treo.'
+            if (-not $app.HasExited) { $app.Kill($true) }
+            throw 'Bộ gỡ Retail Print bị treo khi ứng dụng đang chạy.'
           }
           if ($uninstall.ExitCode -ne 0) {
+            if (-not $app.HasExited) { $app.Kill($true) }
             throw "Bộ gỡ Retail Print trả mã lỗi $($uninstall.ExitCode)."
+          }
+          if (-not $app.WaitForExit(10000)) {
+            $app.Kill($true)
+            throw 'Gỡ cài đặt xong nhưng Retail Print vẫn chạy ngầm.'
+          }
+          if (Test-Path $installedExe) {
+            throw 'Gỡ cài đặt xong nhưng RetailPrint.exe vẫn còn trong thư mục cài.'
           }
 
       - name: Upload Retail Print package

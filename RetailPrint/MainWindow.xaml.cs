@@ -314,6 +314,7 @@ public partial class MainWindow : Window
             return;
 
         e.Cancel = true;
-        Hide();
+        if (System.Windows.Application.Current is App app)
+            _ = Dispatcher.BeginInvoke(new Action(app.ExitApplication));
     }
 }

@@ -35,4 +35,8 @@ Name: "{group}\Retail Print"; Filename: "{app}\RetailPrint.exe"
 Name: "{userdesktop}\Retail Print"; Filename: "{app}\RetailPrint.exe"; Tasks: desktopicon
 
 [Run]
+Filename: "{app}\RetailPrint.exe"; Parameters: "--shutdown"; Flags: runhidden skipifdoesntexist
 Filename: "{app}\RetailPrint.exe"; Description: "Mở Retail Print"; Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+Filename: "{app}\RetailPrint.exe"; Parameters: "--shutdown"; Flags: runhidden skipifdoesntexist; RunOnceId: "RetailPrintShutdown"
