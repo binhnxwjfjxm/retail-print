@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Windows;
@@ -11,12 +12,15 @@ public partial class App : System.Windows.Application
     private Mutex? _singleInstanceMutex;
     private EventWaitHandle? _showWindowEvent;
     private RegisteredWaitHandle? _showWindowWait;
+    private EventWaitHandle? _exitApplicationEvent;
+    private RegisteredWaitHandle? _exitApplicationWait;
     private SettingsService? _settingsService;
     private StartupService? _startupService;
     private PrinterClient? _printerClient;
     private RetailApiClient? _retailApiClient;
     private RetailAgentService? _agentService;
     private bool _exceptionHandlersConfigured;
+    private int _exitStarted;
 
     public MainWindow? MainWindowInstance { get; private set; }
 
@@ -25,6 +29,7 @@ public partial class App : System.Windows.Application
         ConfigureExceptionHandling();
         var smokeTest = HasArgument(e.Args, "--smoke-test");
         var startupProbe = HasArgument(e.Args, "--startup-probe");
+        var shutdownRequest = HasArgument(e.Args, "--shutdown");
 
         try
         {
@@ -36,7 +41,9 @@ public partial class App : System.Windows.Application
                 return;
             }
 
-            StartApplication(e);
+            StartApplication(e, shutdownRequest);
+            if (shutdownRequest)
+                return;
 
             if (startupProbe)
             {
@@ -54,15 +61,17 @@ public partial class App : System.Windows.Application
                 ? "Smoke-test khởi động"
                 : startupProbe
                     ? "Kiểm tra đường khởi động thật"
-                    : "Khởi động ứng dụng";
+                    : shutdownRequest
+                        ? "Dừng Retail Print"
+                        : "Khởi động ứng dụng";
             CrashLogService.Write(error, context);
-            if (!smokeTest && !startupProbe)
+            if (!smokeTest && !startupProbe && !shutdownRequest)
                 ShowStartupFailure();
             Shutdown(-1);
         }
     }
 
-    private void StartApplication(StartupEventArgs e)
+    private void StartApplication(StartupEventArgs e, bool shutdownRequest)
     {
         _singleInstanceMutex = new Mutex(
             initiallyOwned: true,
@@ -71,17 +80,26 @@ public partial class App : System.Windows.Application
 
         if (!createdNew)
         {
-            try
+            if (shutdownRequest)
             {
-                using var signal = EventWaitHandle.OpenExisting(WindowsRuntimeNames.ShowWindowEvent);
-                signal.Set();
+                SignalExistingInstance(WindowsRuntimeNames.ExitApplicationEvent);
+                WaitForOtherRetailPrintProcessesToExit();
             }
-            catch
+            else
             {
-                // Nếu phiên cũ đang thoát, chỉ kết thúc phiên mới để tránh chạy trùng.
+                SignalExistingInstance(WindowsRuntimeNames.ShowWindowEvent);
             }
 
+            _singleInstanceMutex.Dispose();
+            _singleInstanceMutex = null;
             Shutdown();
+            return;
+        }
+
+        if (shutdownRequest)
+        {
+            ReleaseSingleInstanceMutex();
+            Shutdown(0);
             return;
         }
 
@@ -94,20 +112,19 @@ public partial class App : System.Windows.Application
 
         _showWindowWait = ThreadPool.RegisterWaitForSingleObject(
             _showWindowEvent,
-            (_, _) =>
-            {
-                if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
-                    return;
+            (_, _) => DispatchApplicationAction(ShowMainWindow),
+            state: null,
+            millisecondsTimeOutInterval: Timeout.Infinite,
+            executeOnlyOnce: false);
 
-                try
-                {
-                    _ = Dispatcher.BeginInvoke(ShowMainWindow);
-                }
-                catch (InvalidOperationException)
-                {
-                    // Ứng dụng đang đóng; bỏ tín hiệu gọi cửa sổ đến muộn.
-                }
-            },
+        _exitApplicationEvent = new EventWaitHandle(
+            false,
+            EventResetMode.AutoReset,
+            WindowsRuntimeNames.ExitApplicationEvent);
+
+        _exitApplicationWait = ThreadPool.RegisterWaitForSingleObject(
+            _exitApplicationEvent,
+            (_, _) => DispatchApplicationAction(ExitApplication),
             state: null,
             millisecondsTimeOutInterval: Timeout.Infinite,
             executeOnlyOnce: false);
@@ -140,6 +157,72 @@ public partial class App : System.Windows.Application
         {
             MainWindowInstance.Show();
             MainWindowInstance.Activate();
+        }
+    }
+
+    private void DispatchApplicationAction(Action action)
+    {
+        if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+            return;
+
+        try
+        {
+            _ = Dispatcher.BeginInvoke(action);
+        }
+        catch (InvalidOperationException)
+        {
+            // Ứng dụng đang đóng; bỏ tín hiệu đến muộn.
+        }
+    }
+
+    private static void SignalExistingInstance(string eventName)
+    {
+        try
+        {
+            using var signal = EventWaitHandle.OpenExisting(eventName);
+            signal.Set();
+        }
+        catch
+        {
+            // Bản cũ có thể chưa có event này; đường --shutdown có fallback theo process.
+        }
+    }
+
+    private static void WaitForOtherRetailPrintProcessesToExit()
+    {
+        var currentProcessId = Environment.ProcessId;
+        foreach (var process in Process.GetProcessesByName("RetailPrint"))
+        {
+            using (process)
+            {
+                if (process.Id == currentProcessId)
+                    continue;
+
+                try
+                {
+                    if (process.WaitForExit(5000))
+                        continue;
+
+                    try
+                    {
+                        process.CloseMainWindow();
+                    }
+                    catch
+                    {
+                        // Bản chạy nền có thể không có cửa sổ để đóng.
+                    }
+
+                    if (process.WaitForExit(2000))
+                        continue;
+
+                    process.Kill(entireProcessTree: true);
+                    process.WaitForExit(5000);
+                }
+                catch
+                {
+                    // Không để một process cũ lỗi làm treo cài/gỡ phiên bản mới.
+                }
+            }
         }
     }
 
@@ -298,6 +381,9 @@ public partial class App : System.Windows.Application
 
     public void ExitApplication()
     {
+        if (Interlocked.Exchange(ref _exitStarted, 1) != 0)
+            return;
+
         _agentService?.Dispose();
         _agentService = null;
 
@@ -315,17 +401,27 @@ public partial class App : System.Windows.Application
         _showWindowEvent?.Dispose();
         _showWindowEvent = null;
 
+        _exitApplicationWait?.Unregister(null);
+        _exitApplicationWait = null;
+        _exitApplicationEvent?.Dispose();
+        _exitApplicationEvent = null;
+
+        ReleaseSingleInstanceMutex();
+        Shutdown();
+    }
+
+    private void ReleaseSingleInstanceMutex()
+    {
         try
         {
             _singleInstanceMutex?.ReleaseMutex();
         }
         catch (ApplicationException)
         {
-            // Mutex đã được giải phóng.
+            // Mutex đã được giải phóng hoặc phiên này không sở hữu mutex.
         }
 
         _singleInstanceMutex?.Dispose();
         _singleInstanceMutex = null;
-        Shutdown();
     }
 }
