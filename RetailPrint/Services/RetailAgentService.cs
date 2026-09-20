@@ -16,6 +16,7 @@ public sealed class RetailAgentService : IDisposable
     private PairingResult? _currentPairing;
     private string? _currentPairingDeviceId;
     private bool _forcePairingRefresh;
+    private bool _pairingUnavailableShown;
     private bool? _lastStatusConnected;
     private string? _lastStatusText;
     private CancellationTokenSource? _cancellation;
@@ -62,6 +63,7 @@ public sealed class RetailAgentService : IDisposable
             {
                 _currentPairing = null;
                 _currentPairingDeviceId = null;
+                _pairingUnavailableShown = false;
                 return null;
             }
 
@@ -91,6 +93,10 @@ public sealed class RetailAgentService : IDisposable
             var persisted = _pairingCacheService.Load(identity);
             if (persisted is not null)
             {
+                lock (_pairingGate)
+                {
+                    _pairingUnavailableShown = false;
+                }
                 PairingChanged?.Invoke(persisted);
                 if (!_forcePairingRefresh)
                 {
@@ -112,6 +118,7 @@ public sealed class RetailAgentService : IDisposable
                 _currentPairing = pairing;
                 _currentPairingDeviceId = identity.DeviceId;
                 _forcePairingRefresh = false;
+                _pairingUnavailableShown = false;
             }
             PairingChanged?.Invoke(pairing);
             return pairing;
@@ -140,17 +147,20 @@ public sealed class RetailAgentService : IDisposable
             catch (RetailApiException error) when (error.IsUnauthorized)
             {
                 RequirePairingRefresh(identity);
+                ShowPairingUnavailableIfMissing(identity);
                 SetStatus(false, "Chưa kết nối Retail — nhập mã 8 ký tự trên điện thoại");
                 await DelayAsync(TimeSpan.FromSeconds(3), cancellationToken);
             }
             catch (RetailApiException error)
             {
+                ShowPairingUnavailableIfMissing(identity);
                 SetStatus(false, error.Message);
                 await DelayAsync(TimeSpan.FromSeconds(3), cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { break; }
             catch
             {
+                ShowPairingUnavailableIfMissing(identity);
                 SetStatus(false, "Retail Print đang chờ kết nối lại");
                 await DelayAsync(TimeSpan.FromSeconds(3), cancellationToken);
             }
@@ -220,6 +230,34 @@ public sealed class RetailAgentService : IDisposable
             _currentPairingDeviceId = null;
             _forcePairingRefresh = true;
         }
+    }
+
+    private void ShowPairingUnavailableIfMissing(DeviceIdentity identity)
+    {
+        var persisted = _pairingCacheService.Load(identity);
+        var showUnavailable = false;
+
+        lock (_pairingGate)
+        {
+            var hasCurrent = _currentPairing is not null
+                && !string.IsNullOrWhiteSpace(_currentPairing.PairingCode)
+                && ConnectionCodeMatchesDevice(_currentPairingDeviceId, identity);
+
+            if (hasCurrent || persisted is not null)
+            {
+                _pairingUnavailableShown = false;
+                return;
+            }
+
+            if (_pairingUnavailableShown)
+                return;
+
+            _pairingUnavailableShown = true;
+            showUnavailable = true;
+        }
+
+        if (showUnavailable)
+            PairingChanged?.Invoke(null);
     }
 
     private void SetStatus(bool? connected, string text)
