@@ -53,6 +53,21 @@ jobs:
             throw 'Phát hiện chuỗi tiếng Việt bị sai mã hóa.'
           }
 
+      - name: Verify build script on Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path .\build.ps1),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | Format-List
+            throw 'build.ps1 không tương thích Windows PowerShell 5.1.'
+          }
+
       - name: Restore
         run: dotnet restore .\RetailPrint\RetailPrint.csproj
 
