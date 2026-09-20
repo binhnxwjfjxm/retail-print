@@ -29,6 +29,8 @@ Cấu hình cũ từ phiên bản trước chỉ có IP/cổng sẽ tiếp tục
 
 Chế độ Windows gửi nội dung qua hàng đợi in và driver của Windows. Cách này phù hợp cho máy in USB, máy in mạng đã cài driver, máy in chia sẻ và giúp giữ nội dung tiếng Việt tốt hơn so với đường RAW/ESC-POS hiện tại.
 
+Retail Print xếp lệnh in Windows theo một luồng và chạy thao tác với driver trong tiến trình in riêng. Nếu driver hoặc Windows spooler bị kẹt, tiến trình đó sẽ được dừng theo thời gian chờ thay vì làm đứng vòng nhận lệnh Retail. Với máy in nhiệt hỗ trợ ESC/POS, tùy chọn cắt giấy tự động gửi lệnh cắt qua chính hàng đợi máy in Windows sau mỗi bản in.
+
 Khổ giấy 58/80 mm trong Retail Print cần khớp với khổ giấy đã cấu hình trong driver máy in Windows.
 
 ## Vận hành

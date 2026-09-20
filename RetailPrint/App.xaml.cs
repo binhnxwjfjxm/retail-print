@@ -23,11 +23,20 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         ConfigureExceptionHandling();
+        var printWorkerRequestPath = GetArgumentValue(e.Args, "--print-worker");
         var smokeTest = HasArgument(e.Args, "--smoke-test");
         var startupProbe = HasArgument(e.Args, "--startup-probe");
 
         try
         {
+            if (!string.IsNullOrWhiteSpace(printWorkerRequestPath))
+            {
+                base.OnStartup(e);
+                var exitCode = WindowsPrintWorker.Run(printWorkerRequestPath);
+                Shutdown(exitCode);
+                return;
+            }
+
             if (smokeTest)
             {
                 base.OnStartup(e);
@@ -50,13 +59,15 @@ public partial class App : System.Windows.Application
         }
         catch (Exception error)
         {
-            var context = smokeTest
-                ? "Smoke-test khởi động"
-                : startupProbe
-                    ? "Kiểm tra đường khởi động thật"
-                    : "Khởi động ứng dụng";
+            var context = !string.IsNullOrWhiteSpace(printWorkerRequestPath)
+                ? "Tiến trình in Windows"
+                : smokeTest
+                    ? "Smoke-test khởi động"
+                    : startupProbe
+                        ? "Kiểm tra đường khởi động thật"
+                        : "Khởi động ứng dụng";
             CrashLogService.Write(error, context);
-            if (!smokeTest && !startupProbe)
+            if (string.IsNullOrWhiteSpace(printWorkerRequestPath) && !smokeTest && !startupProbe)
                 ShowStartupFailure();
             Shutdown(-1);
         }
@@ -146,6 +157,17 @@ public partial class App : System.Windows.Application
     private static bool HasArgument(IEnumerable<string> args, string expected) => args.Any(
         arg => string.Equals(arg, expected, StringComparison.OrdinalIgnoreCase));
 
+    private static string? GetArgumentValue(IReadOnlyList<string> args, string name)
+    {
+        for (var index = 0; index < args.Count - 1; index += 1)
+        {
+            if (string.Equals(args[index], name, StringComparison.OrdinalIgnoreCase))
+                return args[index + 1];
+        }
+
+        return null;
+    }
+
     private static void RunSmokeTest()
     {
         if (string.Equals(
@@ -165,8 +187,12 @@ public partial class App : System.Windows.Application
             var settingsService = new SettingsService(smokeDirectory);
 
             var freshSettings = settingsService.Load();
-            if (!freshSettings.UsesWindowsPrinter || freshSettings.SettingsVersion != 2)
-                throw new InvalidOperationException("Cấu hình cài mới không mặc định dùng máy in Windows.");
+            if (!freshSettings.UsesWindowsPrinter
+                || freshSettings.SettingsVersion != 2
+                || !freshSettings.AutoCutPaper)
+            {
+                throw new InvalidOperationException("Cấu hình cài mới phải dùng máy in Windows và bật cắt giấy tự động.");
+            }
 
             Directory.CreateDirectory(smokeDirectory);
             File.WriteAllText(

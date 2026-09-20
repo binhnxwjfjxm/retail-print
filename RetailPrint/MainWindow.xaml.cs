@@ -49,6 +49,7 @@ public partial class MainWindow : Window
             PortTextBox.Text = settings.Port.ToString();
             Paper80Radio.IsChecked = settings.PaperWidthMm == 80;
             Paper58Radio.IsChecked = settings.PaperWidthMm == 58;
+            AutoCutPaperCheckBox.IsChecked = settings.AutoCutPaper;
             StartupCheckBox.IsChecked = _startupService.IsEnabled() || settings.StartWithWindows;
 
             WindowsPrinterRadio.IsChecked = settings.UsesWindowsPrinter;
@@ -98,6 +99,7 @@ public partial class MainWindow : Window
             IpAddress = ipAddress,
             Port = port,
             PaperWidthMm = Paper58Radio.IsChecked == true ? 58 : 80,
+            AutoCutPaper = AutoCutPaperCheckBox.IsChecked == true,
             StartWithWindows = StartupCheckBox.IsChecked == true
         };
 

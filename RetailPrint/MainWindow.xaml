@@ -92,6 +92,10 @@
                         <ComboBox x:Name="WindowsPrinterComboBox" Height="34" Padding="7,3" VerticalContentAlignment="Center" />
                         <Button x:Name="RefreshPrintersButton" Grid.Column="2" Content="Làm mới" MinWidth="82" Height="34" Style="{StaticResource SecondaryButton}" Click="RefreshPrintersButton_Click" />
                     </Grid>
+                    <CheckBox x:Name="AutoCutPaperCheckBox"
+                              Content="Cắt giấy tự động sau khi in"
+                              Margin="0,8,0,0"
+                              Foreground="#374151" />
                 </StackPanel>
 
                 <Grid x:Name="NetworkPrinterPanel" Margin="0,14,0,0" Visibility="Collapsed">
