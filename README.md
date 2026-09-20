@@ -62,6 +62,6 @@ CI chạy build, khởi động thử chính EXE đã publish rồi mới tạo 
 
 Bộ cài hiện chưa có chữ ký Authenticode trong repository. Trước khi phát hành rộng cần ký bằng chứng thư ký mã được quản lý an toàn; không lưu chứng thư hoặc khóa ký trong source.
 
-Mặc định ứng dụng kết nối API Công Ty production. Khi phát triển hoặc kiểm thử có thể đặt biến môi trường `RETAIL_PRINT_API_URL` thành một API tương thích.
+Mặc định ứng dụng kết nối trực tiếp API Công Ty production trên VPS. Heroku không còn là runtime production. Khi phát triển hoặc kiểm thử có thể đặt biến môi trường `RETAIL_PRINT_API_URL` thành một API tương thích.
 
 Không lưu token, mật khẩu database hoặc khóa nhà cung cấp trong repository.
