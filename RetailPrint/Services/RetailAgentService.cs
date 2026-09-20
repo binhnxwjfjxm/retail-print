@@ -6,23 +6,35 @@ public sealed class RetailAgentService : IDisposable
 {
     private readonly SettingsService _settingsService;
     private readonly DeviceIdentityService _identityService;
+    private readonly PairingCacheService _pairingCacheService;
     private readonly RetailApiClient _apiClient;
     private readonly PrinterClient _printerClient;
     private readonly PrintJobJournal _journal;
     private readonly object _pairingGate = new();
+    private readonly object _statusGate = new();
     private readonly SemaphoreSlim _connectionCodeGate = new(1, 1);
     private PairingResult? _currentPairing;
     private string? _currentPairingDeviceId;
+    private bool _forcePairingRefresh;
+    private bool? _lastStatusConnected;
+    private string? _lastStatusText;
     private CancellationTokenSource? _cancellation;
     private Task? _loopTask;
 
     public event Action<bool?, string>? StatusChanged;
     public event Action<PairingResult?>? PairingChanged;
 
-    public RetailAgentService(SettingsService settingsService, DeviceIdentityService identityService, RetailApiClient apiClient, PrinterClient printerClient, PrintJobJournal journal)
+    public RetailAgentService(
+        SettingsService settingsService,
+        DeviceIdentityService identityService,
+        PairingCacheService pairingCacheService,
+        RetailApiClient apiClient,
+        PrinterClient printerClient,
+        PrintJobJournal journal)
     {
         _settingsService = settingsService;
         _identityService = identityService;
+        _pairingCacheService = pairingCacheService;
         _apiClient = apiClient;
         _printerClient = printerClient;
         _journal = journal;
@@ -74,19 +86,34 @@ public sealed class RetailAgentService : IDisposable
         {
             cached = ReadCachedConnectionCode(identity, out invalidated);
             if (invalidated) PairingChanged?.Invoke(null);
-            if (cached is not null) return cached;
+            if (cached is not null && !_forcePairingRefresh) return cached;
+
+            var persisted = _pairingCacheService.Load(identity);
+            if (persisted is not null)
+            {
+                PairingChanged?.Invoke(persisted);
+                if (!_forcePairingRefresh)
+                {
+                    lock (_pairingGate)
+                    {
+                        _currentPairing = persisted;
+                        _currentPairingDeviceId = identity.DeviceId;
+                    }
+                    return persisted;
+                }
+            }
 
             var deviceName = $"Retail Print - {Environment.MachineName}";
             if (deviceName.Length > 120) deviceName = deviceName[..120];
-            SetStatus(null, "Đang tải mã kết nối…");
             var pairing = await _apiClient.GetConnectionCodeAsync(identity, deviceName, cancellationToken);
+            _pairingCacheService.Save(identity, pairing);
             lock (_pairingGate)
             {
                 _currentPairing = pairing;
                 _currentPairingDeviceId = identity.DeviceId;
+                _forcePairingRefresh = false;
             }
             PairingChanged?.Invoke(pairing);
-            SetStatus(null, "Mã kết nối đã sẵn sàng");
             return pairing;
         }
         finally
@@ -112,12 +139,13 @@ public sealed class RetailAgentService : IDisposable
             }
             catch (RetailApiException error) when (error.IsUnauthorized)
             {
+                RequirePairingRefresh(identity);
                 SetStatus(false, "Chưa kết nối Retail — nhập mã 8 ký tự trên điện thoại");
                 await DelayAsync(TimeSpan.FromSeconds(3), cancellationToken);
             }
             catch (RetailApiException error)
             {
-                SetStatus(false, error.Retryable ? "Tạm mất kết nối Công Ty" : error.Message);
+                SetStatus(false, error.Message);
                 await DelayAsync(TimeSpan.FromSeconds(3), cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { break; }
@@ -181,7 +209,35 @@ public sealed class RetailAgentService : IDisposable
         catch (RetailApiException) { }
     }
 
-    private void SetStatus(bool? connected, string text) => StatusChanged?.Invoke(connected, text);
+    private void RequirePairingRefresh(DeviceIdentity identity)
+    {
+        lock (_pairingGate)
+        {
+            if (!ConnectionCodeMatchesDevice(_currentPairingDeviceId, identity))
+                return;
+
+            _currentPairing = null;
+            _currentPairingDeviceId = null;
+            _forcePairingRefresh = true;
+        }
+    }
+
+    private void SetStatus(bool? connected, string text)
+    {
+        lock (_statusGate)
+        {
+            if (_lastStatusConnected == connected
+                && string.Equals(_lastStatusText, text, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _lastStatusConnected = connected;
+            _lastStatusText = text;
+        }
+
+        StatusChanged?.Invoke(connected, text);
+    }
 
     private static string SafePrinterMessage(string message)
     {

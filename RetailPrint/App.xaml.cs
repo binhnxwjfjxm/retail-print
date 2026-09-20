@@ -129,11 +129,13 @@ public partial class App : System.Windows.Application
         _retailApiClient = new RetailApiClient();
 
         var identityService = new DeviceIdentityService();
+        var pairingCacheService = new PairingCacheService();
         var journal = new PrintJobJournal();
 
         _agentService = new RetailAgentService(
             _settingsService,
             identityService,
+            pairingCacheService,
             _retailApiClient,
             _printerClient,
             journal);
@@ -227,6 +229,25 @@ public partial class App : System.Windows.Application
                 throw new InvalidOperationException("Mã kết nối cũ phải bị bỏ khi deviceId của máy thay đổi.");
             }
 
+            var pairingCache = new PairingCacheService(smokeDirectory);
+            var pairing = new PairingResult
+            {
+                AgentId = "7422dfad-bd9d-4f58-a3b8-7551ddc9ab20",
+                PairingCode = "ABCD2345",
+                DeviceName = "Retail Print - Smoke"
+            };
+            pairingCache.Save(identity, pairing);
+            if (pairingCache.Load(identity)?.PairingCode != pairing.PairingCode)
+                throw new InvalidOperationException("Mã kết nối cục bộ không được lưu/đọc đúng.");
+            if (pairingCache.Load(new DeviceIdentity
+                {
+                    DeviceId = "a41f4bce-83be-4e13-ae28-31bfe89cfa4a",
+                    Credential = new string('b', 48)
+                }) is not null)
+            {
+                throw new InvalidOperationException("Mã kết nối cục bộ không được dùng cho máy Windows khác.");
+            }
+
             var startupService = new StartupService();
             startupService.Apply(false);
             var printerClient = new PrinterClient();
@@ -234,6 +255,7 @@ public partial class App : System.Windows.Application
             using var agentService = new RetailAgentService(
                 settingsService,
                 new DeviceIdentityService(),
+                pairingCache,
                 retailApiClient,
                 printerClient,
                 new PrintJobJournal());

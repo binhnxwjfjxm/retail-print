@@ -199,16 +199,22 @@ public sealed class RetailApiClient : IDisposable
                     JsonOptions,
                     cancellationToken);
             }
-            catch (JsonException)
+            catch (Exception error) when (error is JsonException or NotSupportedException)
             {
                 // Xử lý bên dưới bằng thông báo ổn định, không lộ nội dung máy chủ.
             }
 
             if (!response.IsSuccessStatusCode)
             {
+                var routeMissing = response.StatusCode == HttpStatusCode.NotFound
+                    && envelope?.Error is null;
                 throw new RetailApiException(
-                    envelope?.Error?.Code ?? "RETAIL_PRINT_API_REQUEST_FAILED",
-                    envelope?.Error?.Message ?? "Công Ty chưa thể xử lý yêu cầu Retail Print.",
+                    envelope?.Error?.Code
+                        ?? (routeMissing ? "RETAIL_PRINT_API_ROUTE_MISSING" : "RETAIL_PRINT_API_REQUEST_FAILED"),
+                    envelope?.Error?.Message
+                        ?? (routeMissing
+                            ? "Máy chủ Công Ty chưa có chức năng kết nối Retail Print. Cần cập nhật backend."
+                            : "Công Ty chưa thể xử lý yêu cầu Retail Print."),
                     envelope?.Error?.Retryable == true || (int)response.StatusCode >= 500,
                     response.StatusCode);
             }
