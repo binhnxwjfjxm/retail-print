@@ -55,6 +55,7 @@ public sealed class PrinterClient
                 settings.PaperWidthMm,
                 document,
                 payload.Copies,
+                settings.AutoCutPaper,
                 cancellationToken);
             return;
         }

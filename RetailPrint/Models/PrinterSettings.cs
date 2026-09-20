@@ -19,6 +19,7 @@ public sealed class PrinterSettings
     public string IpAddress { get; set; } = "192.168.1.100";
     public int Port { get; set; } = 9100;
     public int PaperWidthMm { get; set; } = 80;
+    public bool AutoCutPaper { get; set; } = true;
     public bool StartWithWindows { get; set; } = false;
 
     [JsonIgnore]
