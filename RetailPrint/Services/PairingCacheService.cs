@@ -57,16 +57,23 @@ public sealed class PairingCacheService
             return;
         }
 
-        Directory.CreateDirectory(_directory);
-        var record = new PairingCacheRecord
+        try
         {
-            DeviceId = identity.DeviceId,
-            Pairing = pairing
-        };
-        var json = JsonSerializer.Serialize(record, JsonOptions);
-        var tempPath = CachePath + ".tmp";
-        File.WriteAllText(tempPath, json);
-        File.Move(tempPath, CachePath, overwrite: true);
+            Directory.CreateDirectory(_directory);
+            var record = new PairingCacheRecord
+            {
+                DeviceId = identity.DeviceId,
+                Pairing = pairing
+            };
+            var json = JsonSerializer.Serialize(record, JsonOptions);
+            var tempPath = CachePath + ".tmp";
+            File.WriteAllText(tempPath, json);
+            File.Move(tempPath, CachePath, overwrite: true);
+        }
+        catch
+        {
+            // Cache chỉ để giữ mã khi mở lại ứng dụng; lỗi ghi file không được làm hỏng kết nối đang thành công.
+        }
     }
 
     private static bool IsValidPairing(PairingResult? pairing)

@@ -136,8 +136,8 @@
                     <StackPanel>
                         <TextBlock Text="Mã kết nối Retail" FontWeight="SemiBold" Foreground="#111827" />
                         <TextBlock Text="Mã cố định của máy Windows này. Điện thoại Retail nào cũng nhập cùng mã." Margin="0,2,0,8" FontSize="11" Foreground="#6B7280" TextWrapping="Wrap" />
-                        <TextBlock x:Name="PairingCodeText" Text="Đang tải mã…" FontSize="22" FontWeight="SemiBold" Foreground="#111827" />
-                        <TextBlock x:Name="PairingHintText" Text="Mã không mất sau khi kết nối và không cần lấy lại." Margin="0,3,0,0" FontSize="11" Foreground="#6B7280" TextWrapping="Wrap" />
+                        <TextBlock x:Name="PairingCodeText" Text="Đang kết nối…" FontSize="22" FontWeight="SemiBold" Foreground="#111827" />
+                        <TextBlock x:Name="PairingHintText" Text="Khi có mã, Retail Print sẽ giữ lại trên đúng máy Windows này." Margin="0,3,0,0" FontSize="11" Foreground="#6B7280" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
 
