@@ -29,7 +29,7 @@ public sealed class RetailApiException : Exception
 
 public sealed class RetailApiClient : IDisposable
 {
-    private const string ProductionBaseUrl = "https://hung-phat-945da1547594.herokuapp.com/";
+    private const string ProductionBaseUrl = "https://40.233.83.234/";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
