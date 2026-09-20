@@ -300,8 +300,8 @@ public partial class MainWindow : Window
         {
             if (pairing is null || string.IsNullOrWhiteSpace(pairing.PairingCode))
             {
-                PairingCodeText.Text = "Đang tải mã…";
-                PairingHintText.Text = "Mã cố định của máy này sẽ tự hiện khi kết nối được Công Ty.";
+                PairingCodeText.Text = "Chưa có mã";
+                PairingHintText.Text = "Retail Print sẽ tự thử kết nối lại; cửa sổ không cần mở liên tục.";
                 return;
             }
 
