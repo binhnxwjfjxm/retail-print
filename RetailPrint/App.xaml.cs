@@ -248,6 +248,35 @@ public partial class App : System.Windows.Application
                 throw new InvalidOperationException("Mã kết nối cục bộ không được dùng cho máy Windows khác.");
             }
 
+            var receiptPayload = new RetailPrintPayload
+            {
+                DocumentType = "SALES_ORDER",
+                Paper = "80mm",
+                Copies = 1,
+                FontSizePercent = 100,
+                Heading = "HƯNG PHÁT",
+                Title = "PHIẾU XUẤT KHO",
+                Subtitle = "Đơn đang lập",
+                Meta =
+                [
+                    new RetailPrintMeta { Label = "Khách hàng", Value = "Khách vãng lai" },
+                    new RetailPrintMeta { Label = "Ngày", Value = "10:39 21/9/26" }
+                ],
+                Columns = ["STT", "Sản phẩm", "SL", "ĐVT", "Đơn giá", "Thành tiền"],
+                Rows =
+                [
+                    ["1", "3Q BIBI ĐEN", "1", "Gói", "52.000 ₫", "52.000 ₫"],
+                    ["2", "3Q BIBI ĐEN", "1", "Thùng", "280.000 ₫", "280.000 ₫"],
+                    ["3", "3Q BIBI TRẮNG", "1", "Thùng", "270.000 ₫", "270.000 ₫"]
+                ],
+                Totals = [new RetailPrintTotal { Label = "Tổng cộng", Value = "602.000 ₫" }]
+            };
+            using (var receipt = ThermalReceiptRenderer.Render(receiptPayload, 80))
+            {
+                if (receipt.Width != 576 || receipt.Height < 300)
+                    throw new InvalidOperationException("Bố cục phiếu nhiệt 80 mm không được tạo đúng kích thước.");
+            }
+
             var startupService = new StartupService();
             startupService.Apply(false);
             var printerClient = new PrinterClient();

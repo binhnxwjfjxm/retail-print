@@ -49,11 +49,10 @@ public sealed class PrinterClient
 
         if (settings.UsesWindowsPrinter)
         {
-            var document = BuildTextDocument(payload, asciiOnly: false);
-            await _windowsPrinterService.PrintTextAsync(
+            await _windowsPrinterService.PrintPayloadAsync(
                 settings.WindowsPrinterName,
                 settings.PaperWidthMm,
-                document,
+                payload,
                 payload.Copies,
                 settings.AutoCutPaper,
                 cancellationToken);

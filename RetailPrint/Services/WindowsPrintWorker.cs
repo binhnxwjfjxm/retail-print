@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Drawing.Printing;
 using System.IO;
+using RetailPrint.Models;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
@@ -11,7 +13,7 @@ internal sealed class WindowsPrintWorkerRequest
 {
     public string PrinterName { get; set; } = "";
     public int PaperWidthMm { get; set; }
-    public string Content { get; set; } = "";
+    public RetailPrintPayload Payload { get; set; } = new();
     public int Copies { get; set; }
     public bool AutoCutPaper { get; set; }
 }
@@ -42,17 +44,13 @@ internal static class WindowsPrintWorker
             Validate(request);
 
             string? warning = null;
-            var normalized = (request.Content ?? "")
-                .Replace("\r\n", "\n")
-                .Replace('\r', '\n');
-            var lines = normalized.Split('\n', StringSplitOptions.None);
 
             for (var copy = 0; copy < request.Copies; copy += 1)
             {
                 PrintOneCopy(
                     request.PrinterName,
                     request.PaperWidthMm,
-                    lines);
+                    request.Payload);
 
                 if (request.AutoCutPaper)
                 {
@@ -99,66 +97,54 @@ internal static class WindowsPrintWorker
             throw new InvalidOperationException("Khổ giấy chỉ hỗ trợ 58 mm hoặc 80 mm.");
         if (request.Copies is < 1 or > 5)
             throw new InvalidOperationException("Số bản in phải từ 1 đến 5.");
+        if (request.Payload is null || string.IsNullOrWhiteSpace(request.Payload.Title))
+            throw new InvalidOperationException("Nội dung in chưa có tiêu đề.");
     }
 
     private static void PrintOneCopy(
         string printerName,
         int paperWidthMm,
-        string[] lines)
+        RetailPrintPayload payload)
     {
+        using var receipt = ThermalReceiptRenderer.Render(payload, paperWidthMm);
+        var paperWidth = MillimetersToHundredthsInch(paperWidthMm);
+        var horizontalMargin = paperWidthMm == 80 ? 16f : 10f;
+        var printableWidth = Math.Max(1f, paperWidth - horizontalMargin * 2f);
+        var receiptHeight = printableWidth * receipt.Height / receipt.Width;
+        var paperHeight = Math.Max(100, (int)Math.Ceiling(receiptHeight + 18f));
+
         using var document = new PrintDocument
         {
             DocumentName = "Retail Print",
-            PrintController = new StandardPrintController()
+            PrintController = new StandardPrintController(),
+            OriginAtMargins = false
         };
 
         document.PrinterSettings.PrinterName = printerName;
         document.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
+        document.DefaultPageSettings.PaperSize = new PaperSize(
+            $"Retail {paperWidthMm} mm",
+            paperWidth,
+            paperHeight);
 
         if (!document.PrinterSettings.IsValid)
             throw new InvalidOperationException("Windows chưa thể sử dụng máy in đã chọn.");
 
-        var lineIndex = 0;
         document.PrintPage += (_, args) =>
         {
             var graphics = args.Graphics
                            ?? throw new InvalidOperationException("Windows chưa tạo được vùng in cho máy in đã chọn.");
 
-            var bounds = args.MarginBounds.Width > 0 && args.MarginBounds.Height > 0
-                ? args.MarginBounds
-                : args.PageBounds;
-            var availableWidth = Math.Max(1, bounds.Width);
-            var maxCharacters = paperWidthMm == 58 ? 32 : 48;
-
-            using var font = CreateFittedFont(graphics, paperWidthMm, maxCharacters, availableWidth);
-            using var format = new StringFormat(StringFormat.GenericTypographic)
-            {
-                FormatFlags = StringFormatFlags.NoWrap,
-                Trimming = StringTrimming.None
-            };
-
-            var lineHeight = Math.Max(font.GetHeight(graphics) + 2f, 10f);
-            var y = (float)bounds.Top;
-            var bottom = (float)bounds.Bottom;
-
-            while (lineIndex < lines.Length)
-            {
-                if (y + lineHeight > bottom && y > bounds.Top)
-                {
-                    args.HasMorePages = true;
-                    return;
-                }
-
-                graphics.DrawString(
-                    lines[lineIndex],
-                    font,
-                    Brushes.Black,
-                    new PointF(bounds.Left, y),
-                    format);
-
-                y += lineHeight;
-                lineIndex += 1;
-            }
+            graphics.TranslateTransform(
+                -args.PageSettings.HardMarginX,
+                -args.PageSettings.HardMarginY);
+            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            graphics.DrawImage(
+                receipt,
+                new RectangleF(horizontalMargin, 0f, printableWidth, receiptHeight),
+                new RectangleF(0f, 0f, receipt.Width, receipt.Height),
+                GraphicsUnit.Pixel);
 
             args.HasMorePages = false;
         };
@@ -173,31 +159,8 @@ internal static class WindowsPrintWorker
         }
     }
 
-    private static Font CreateFittedFont(
-        Graphics graphics,
-        int paperWidthMm,
-        int maxCharacters,
-        float availableWidth)
-    {
-        var size = paperWidthMm == 58 ? 8f : 9f;
-        while (size >= 6f)
-        {
-            var font = new Font("Consolas", size, FontStyle.Regular, GraphicsUnit.Point);
-            var width = graphics.MeasureString(
-                new string('M', maxCharacters),
-                font,
-                int.MaxValue,
-                StringFormat.GenericTypographic).Width;
-
-            if (width <= availableWidth)
-                return font;
-
-            font.Dispose();
-            size -= 0.5f;
-        }
-
-        return new Font("Consolas", 6f, FontStyle.Regular, GraphicsUnit.Point);
-    }
+    private static int MillimetersToHundredthsInch(int millimeters) =>
+        Math.Max(1, (int)Math.Round(millimeters / 25.4d * 100d));
 
     private static void SendCutCommand(string printerName)
     {
