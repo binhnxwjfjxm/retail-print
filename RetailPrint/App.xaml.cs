@@ -275,6 +275,24 @@ public partial class App : System.Windows.Application
             {
                 if (receipt.Width != 576 || receipt.Height < 300)
                     throw new InvalidOperationException("Bố cục phiếu nhiệt 80 mm không được tạo đúng kích thước.");
+
+                var darkSamples = 0;
+                for (var y = 0; y < receipt.Height; y += 4)
+                {
+                    for (var x = 0; x < receipt.Width; x += 4)
+                    {
+                        var pixel = receipt.GetPixel(x, y);
+                        if (pixel.R < 100 && pixel.G < 100 && pixel.B < 100)
+                            darkSamples += 1;
+                    }
+                }
+                if (darkSamples < 50)
+                    throw new InvalidOperationException("Bản in nhiệt bị trắng, không có đủ nội dung nhìn thấy.");
+
+                var raster = WindowsPrintWorker.BuildEscPosRasterDocument(receipt, autoCutPaper: true);
+                var minimumRasterBytes = ((receipt.Width + 7) / 8) * receipt.Height;
+                if (raster.Length <= minimumRasterBytes)
+                    throw new InvalidOperationException("Dữ liệu ảnh gửi máy in chưa được đóng gói đầy đủ.");
             }
 
             var startupService = new StartupService();
