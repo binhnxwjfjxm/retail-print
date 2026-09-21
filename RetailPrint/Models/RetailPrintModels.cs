@@ -29,6 +29,7 @@ public sealed class RetailPrintPayload
     public string DocumentType { get; set; } = "";
     public string Paper { get; set; } = "";
     public int Copies { get; set; } = 1;
+    public int FontSizePercent { get; set; } = 100;
     public string? Heading { get; set; }
     public string Title { get; set; } = "";
     public string? Subtitle { get; set; }

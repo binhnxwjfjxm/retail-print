@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Drawing.Printing;
 using System.IO;
 using System.Text.Json;
+using RetailPrint.Models;
 using DrawingPrinterSettings = System.Drawing.Printing.PrinterSettings;
 
 namespace RetailPrint.Services;
@@ -42,10 +43,10 @@ public sealed class WindowsPrinterService
         }
     }
 
-    public async Task PrintTextAsync(
+    public async Task PrintPayloadAsync(
         string printerName,
         int paperWidthMm,
-        string content,
+        RetailPrintPayload payload,
         int copies,
         bool autoCutPaper,
         CancellationToken cancellationToken = default)
@@ -63,7 +64,7 @@ public sealed class WindowsPrinterService
             await RunWorkerAsync(
                 printerName.Trim(),
                 paperWidthMm,
-                content ?? "",
+                payload,
                 copies,
                 autoCutPaper,
                 cancellationToken);
@@ -77,7 +78,7 @@ public sealed class WindowsPrinterService
     private static async Task RunWorkerAsync(
         string printerName,
         int paperWidthMm,
-        string content,
+        RetailPrintPayload payload,
         int copies,
         bool autoCutPaper,
         CancellationToken cancellationToken)
@@ -98,7 +99,7 @@ public sealed class WindowsPrinterService
         {
             PrinterName = printerName,
             PaperWidthMm = paperWidthMm,
-            Content = content,
+            Payload = payload,
             Copies = copies,
             AutoCutPaper = autoCutPaper
         };
